@@ -79,19 +79,31 @@ mod tests {
 
     #[test]
     fn display_main_worktree_as_at() {
-        let info = make_info("C:\\repo", Some("main"), true);
-        let base_dir = PathBuf::from("C:\\repo\\worktree");
+        #[cfg(windows)]
+        let (repo_path, base_dir) = ("C:\\repo", "C:\\repo\\worktree");
+        #[cfg(not(windows))]
+        let (repo_path, base_dir) = ("/repo", "/repo/worktree");
+
+        let info = make_info(repo_path, Some("main"), true);
+        let base_dir = PathBuf::from(base_dir);
         assert_eq!(display_name(&info, &base_dir), "@");
     }
 
     #[test]
     fn display_relative_worktree_name() {
-        let info = make_info(
+        #[cfg(windows)]
+        let (worktree_path, base_dir) = (
             "C:\\repo\\worktree\\feature\\auth",
-            Some("feature/auth"),
-            false,
+            "C:\\repo\\worktree",
         );
-        let base_dir = PathBuf::from("C:\\repo\\worktree");
+        #[cfg(not(windows))]
+        let (worktree_path, base_dir) = (
+            "/repo/worktree/feature/auth",
+            "/repo/worktree",
+        );
+
+        let info = make_info(worktree_path, Some("feature/auth"), false);
+        let base_dir = PathBuf::from(base_dir);
         assert_eq!(
             display_name(&info, &base_dir),
             format!("feature{}auth", std::path::MAIN_SEPARATOR)
@@ -100,19 +112,31 @@ mod tests {
 
     #[test]
     fn managed_worktree_within_base_dir() {
-        let info = make_info(
+        #[cfg(windows)]
+        let (worktree_path, base_dir) = (
             "C:\\repo\\worktree\\feature\\auth",
-            Some("feature/auth"),
-            false,
+            "C:\\repo\\worktree",
         );
-        let base_dir = PathBuf::from("C:\\repo\\worktree");
+        #[cfg(not(windows))]
+        let (worktree_path, base_dir) = (
+            "/repo/worktree/feature/auth",
+            "/repo/worktree",
+        );
+
+        let info = make_info(worktree_path, Some("feature/auth"), false);
+        let base_dir = PathBuf::from(base_dir);
         assert!(is_managed(&info, &base_dir));
     }
 
     #[test]
     fn unmanaged_worktree_outside_base_dir() {
-        let info = make_info("D:\\temp\\feature", Some("feature"), false);
-        let base_dir = PathBuf::from("C:\\repo\\worktree");
+        #[cfg(windows)]
+        let (worktree_path, base_dir) = ("D:\\temp\\feature", "C:\\repo\\worktree");
+        #[cfg(not(windows))]
+        let (worktree_path, base_dir) = ("/temp/feature", "/repo/worktree");
+
+        let info = make_info(worktree_path, Some("feature"), false);
+        let base_dir = PathBuf::from(base_dir);
         assert!(!is_managed(&info, &base_dir));
     }
 }

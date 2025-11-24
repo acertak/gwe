@@ -1,9 +1,9 @@
 use std::process::ExitCode;
 
-use wtw::error::AppError;
+use gwe::error::AppError;
 
 fn main() -> ExitCode {
-    match wtw::run() {
+    match gwe::run() {
         Ok(code) => code,
         Err(error) => match error.downcast::<AppError>() {
             Ok(app) => {
@@ -19,7 +19,7 @@ fn main() -> ExitCode {
                         exit_code = app.exit_code();
                         message = app.to_string();
                         break;
-                    } else if cause.is::<wtw::git::runner::GitError>() {
+                    } else if cause.is::<gwe::git::runner::GitError>() {
                         exit_code = 3;
                         message = cause.to_string();
                         break;

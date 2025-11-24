@@ -4,7 +4,7 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::cli::RemoveCommand;
+use crate::cli::RmCommand;
 use crate::config::Config;
 use crate::error::AppError;
 use crate::git::rev::RepoContext;
@@ -16,7 +16,7 @@ pub fn run(
     repo: &RepoContext,
     git: &GitRunner,
     config: &Config,
-    cmd: &RemoveCommand,
+    cmd: &RmCommand,
 ) -> Result<()> {
     let target = cmd
         .target
@@ -164,12 +164,12 @@ fn remove_branch(git: &GitRunner, branch: &str, force: bool) -> std::result::Res
 
 fn worktree_not_found(target: &str, mut available: Vec<String>) -> AppError {
     let suggestion = if available.is_empty() {
-        "Run 'wtw list' to see available worktrees.".to_string()
+        "Run 'gwe list' to see available worktrees.".to_string()
     } else {
         available.sort();
         available.dedup();
         format!(
-            "Available worktrees: {}\nRun 'wtw list' to see available worktrees.",
+            "Available worktrees: {}\nRun 'gwe list' to see available worktrees.",
             available.join(", ")
         )
     };

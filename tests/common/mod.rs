@@ -56,14 +56,14 @@ impl TestRepo {
 
     pub fn command(&self) -> Command {
         #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("wtw").expect("wtw binary");
+        let mut cmd = Command::cargo_bin("gwe").expect("gwe binary");
         cmd.current_dir(self.path());
         cmd
     }
 
     pub fn command_in(&self, dir: &Path) -> Command {
         #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("wtw").expect("wtw binary");
+        let mut cmd = Command::cargo_bin("gwe").expect("gwe binary");
         cmd.current_dir(dir);
         cmd
     }
@@ -78,6 +78,10 @@ impl TestRepo {
 
     pub fn worktree_path_for(&self, name: &str) -> PathBuf {
         let mut path = self.worktrees_dir();
+        // Includes repo name as prefix
+        if let Some(repo_name) = self.path().file_name() {
+            path.push(repo_name);
+        }
         for segment in name.split(['/', '\\']) {
             path.push(segment);
         }

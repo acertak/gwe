@@ -14,6 +14,12 @@ pub struct Config {
     pub defaults: Defaults,
     #[serde(default)]
     pub hooks: Hooks,
+    #[serde(default)]
+    pub editor: Editor,
+    #[serde(default)]
+    pub ai: Ai,
+    #[serde(default)]
+    pub default_branch: Option<String>,
 }
 
 impl Default for Config {
@@ -22,6 +28,9 @@ impl Default for Config {
             version: default_version(),
             defaults: Defaults::default(),
             hooks: Hooks::default(),
+            editor: Editor::default(),
+            ai: Ai::default(),
+            default_branch: None,
         }
     }
 }
@@ -48,6 +57,16 @@ impl Default for Defaults {
             base_dir: default_base_dir(),
         }
     }
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct Editor {
+    pub default: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct Ai {
+    pub default: Option<String>,
 }
 
 impl Defaults {
@@ -91,7 +110,14 @@ pub struct Hooks {
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum Hook {
     Copy(CopyHook),
+    GlobCopy(GlobCopyHook),
     Command(CommandHook),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GlobCopyHook {
+    pub pattern: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -123,9 +149,10 @@ mod tests {
         let mut config = Config::default();
         config.defaults.base_dir = PathBuf::from("custom-worktrees");
 
-        let resolved = config.resolved_base_dir(repo.path());
-        let expected = normalize_for_assert(fs::canonicalize(repo.path()).expect("canonical root"))
-            .join("custom-worktrees");
+        // Use canonical path for repo root to ensure consistency on macOS (/var vs /private/var)
+        let canonical_repo = fs::canonicalize(repo.path()).expect("canonical root");
+        let resolved = config.resolved_base_dir(&canonical_repo);
+        let expected = normalize_fs_path(&canonical_repo).join("custom-worktrees");
 
         assert_eq!(resolved, expected);
     }
@@ -135,10 +162,13 @@ mod tests {
         let repo = TempDir::new().expect("temp repo");
         let absolute = TempDir::new().expect("absolute base");
         let mut config = Config::default();
-        config.defaults.base_dir = absolute.path().to_path_buf();
+        
+        // Use canonical path for the absolute base dir to ensure consistency
+        let canonical_abs = fs::canonicalize(absolute.path()).expect("canonical abs");
+        config.defaults.base_dir = canonical_abs.clone();
 
         let resolved = config.resolved_base_dir(repo.path());
-        let expected = normalize_for_assert(fs::canonicalize(absolute.path()).expect("canonical abs"));
+        let expected = normalize_fs_path(&canonical_abs);
 
         assert_eq!(resolved, expected);
     }
@@ -149,26 +179,12 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.version, DEFAULT_VERSION);
 
-        let resolved = config.resolved_base_dir(repo.path());
-        let expected = normalize_for_assert(fs::canonicalize(repo.path()).expect("canonical root"))
-            .join(DEFAULT_BASE_DIR);
+        // Use canonical path for repo root
+        let canonical_repo = fs::canonicalize(repo.path()).expect("canonical root");
+        let resolved = config.resolved_base_dir(&canonical_repo);
+        let expected = normalize_fs_path(&canonical_repo).join(DEFAULT_BASE_DIR);
 
         assert_eq!(resolved, expected);
     }
 
-    fn normalize_for_assert(path: PathBuf) -> PathBuf {
-        #[cfg(windows)]
-        {
-            let display = path.to_string_lossy();
-            if let Some(stripped) = display.strip_prefix(r"\\?\") {
-                PathBuf::from(stripped)
-            } else {
-                PathBuf::from(display.as_ref())
-            }
-        }
-        #[cfg(not(windows))]
-        {
-            path
-        }
-    }
 }

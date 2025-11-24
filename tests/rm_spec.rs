@@ -5,7 +5,7 @@ use predicates::prelude::*;
 use std::path::Path;
 
 #[test]
-fn remove_with_branch_deletes_branch_and_worktree() {
+fn rm_with_branch_deletes_branch_and_worktree() {
     let repo = TestRepo::new();
     let branch = "feature/remove";
     let worktree_path = repo.worktree_path_for(branch);
@@ -16,7 +16,7 @@ fn remove_with_branch_deletes_branch_and_worktree() {
         .success();
 
     repo.command()
-        .args(["remove", "--with-branch", "--force-branch", branch])
+        .args(["rm", "--with-branch", "--force-branch", branch])
         .assert()
         .success()
         .stdout(predicate::str::contains(worktree_path.to_string_lossy()));
@@ -32,7 +32,7 @@ fn remove_with_branch_deletes_branch_and_worktree() {
 }
 
 #[test]
-fn remove_only_targets_current_base_dir() {
+fn rm_only_targets_current_base_dir() {
     let repo = TestRepo::new();
     repo.create_branch("feature/legacy");
     repo.command()
@@ -49,7 +49,7 @@ defaults:
     );
 
     repo.command()
-        .args(["remove", "feature/legacy"])
+        .args(["rm", "feature/legacy"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("not found"));
@@ -61,7 +61,7 @@ defaults:
 }
 
 #[test]
-fn remove_rejects_current_worktree() {
+fn rm_rejects_current_worktree() {
     let repo = TestRepo::new();
     repo.create_branch("feature/current");
     repo.command()
@@ -71,7 +71,7 @@ fn remove_rejects_current_worktree() {
     let worktree_path = repo.worktree_path_for("feature/current");
 
     repo.command_in(&worktree_path)
-        .args(["remove", "feature/current"])
+        .args(["rm", "feature/current"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("cannot remove the current worktree"));
@@ -80,10 +80,10 @@ fn remove_rejects_current_worktree() {
 }
 
 #[test]
-fn remove_force_branch_requires_with_branch_flag() {
+fn rm_force_branch_requires_with_branch_flag() {
     let repo = TestRepo::new();
     repo.command()
-        .args(["remove", "--force-branch", "feature/missing"])
+        .args(["rm", "--force-branch", "feature/missing"])
         .assert()
         .failure()
         .stderr(predicate::str::contains(

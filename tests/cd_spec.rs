@@ -54,6 +54,6 @@ fn cd_unknown_worktree_suggests_available_options() {
         .failure()
         .stderr(predicate::str::contains("worktree 'missing' not found"))
         .stderr(predicate::str::contains("Available worktrees"))
-        .stderr(predicate::str::contains("Run 'wtw list'"));
+        .stderr(predicate::str::contains("Run 'gwe list'"));
 }
 

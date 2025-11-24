@@ -5,25 +5,33 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::shell::pwsh;
+use crate::shell::{bash, pwsh, zsh};
 
-/// 既定の PowerShell プロファイルパス（ユーザー／ホスト単位）を推定する
-///
-/// 現状は PowerShell 7 以降の既定値に合わせて:
-///   %USERPROFILE%\Documents\PowerShell\Microsoft.PowerShell_profile.ps1
-pub fn default_pwsh_profile() -> Result<PathBuf> {
-    let home = env::var("USERPROFILE")
+fn default_home() -> Result<String> {
+    env::var("USERPROFILE")
         .or_else(|_| env::var("HOME"))
-        .context("failed to determine user home directory for PowerShell profile")?;
+        .context("failed to determine user home directory")
+}
 
+pub fn default_pwsh_profile() -> Result<PathBuf> {
+    let home = default_home()?;
     Ok(PathBuf::from(home)
         .join("Documents")
         .join("PowerShell")
         .join("Microsoft.PowerShell_profile.ps1"))
 }
 
-/// PowerShell プロファイルに wtw 用シェル統合スクリプトを追記する
-pub fn init_pwsh(profile_path: &Path) -> Result<()> {
+pub fn default_bash_profile() -> Result<PathBuf> {
+    let home = default_home()?;
+    Ok(PathBuf::from(home).join(".bashrc"))
+}
+
+pub fn default_zsh_profile() -> Result<PathBuf> {
+    let home = default_home()?;
+    Ok(PathBuf::from(home).join(".zshrc"))
+}
+
+fn append_script(profile_path: &Path, script: &str) -> Result<()> {
     let profile_display = profile_path.display().to_string();
 
     if let Some(parent) = profile_path.parent() {
@@ -37,8 +45,7 @@ pub fn init_pwsh(profile_path: &Path) -> Result<()> {
 
     let existing = fs::read_to_string(profile_path).unwrap_or_default();
 
-    // すでに設定済みなら何もしない（冪等）
-    if existing.contains("# wtw shell integration") {
+    if existing.contains("# gwe shell integration") {
         return Ok(());
     }
 
@@ -52,10 +59,22 @@ pub fn init_pwsh(profile_path: &Path) -> Result<()> {
         writeln!(file)?;
     }
 
-    writeln!(file, "# wtw shell integration")?;
-    writeln!(file, "{}", pwsh::script())?;
+    writeln!(file, "# gwe shell integration")?;
+    writeln!(file, "{}", script)?;
 
     Ok(())
+}
+
+pub fn init_pwsh(profile_path: &Path) -> Result<()> {
+    append_script(profile_path, &pwsh::script())
+}
+
+pub fn init_bash(profile_path: &Path) -> Result<()> {
+    append_script(profile_path, &bash::script())
+}
+
+pub fn init_zsh(profile_path: &Path) -> Result<()> {
+    append_script(profile_path, &zsh::script())
 }
 
 

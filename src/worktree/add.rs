@@ -14,6 +14,7 @@ use crate::git::runner::{GitError, GitRunner};
 use crate::git::worktree::{WorktreeInfo, list_worktrees};
 use crate::hooks::executor::HookExecutor;
 use crate::worktree::common;
+use crate::worktree::tool;
 
 pub fn run(repo: &RepoContext, git: &GitRunner, config: &Config, cmd: &AddCommand) -> Result<()> {
     let existing = list_worktrees(git)?;
@@ -33,6 +34,10 @@ pub fn run(repo: &RepoContext, git: &GitRunner, config: &Config, cmd: &AddComman
 
     let executor = HookExecutor::new(config, repo.main_root());
     executor.execute_post_create_hooks(&mut stdout, &spec.path)?;
+
+    if cmd.open {
+        tool::launch_editor(config, &spec.path)?;
+    }
 
     Ok(())
 }
@@ -109,7 +114,16 @@ fn build_spec(
         .into());
     }
 
-    let path = base_dir.join(&relative);
+    // Use the repository directory name as the first path component
+    let repo_name = repo
+        .main_root()
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("repo");
+
+    let final_relative = PathBuf::from(repo_name).join(&relative);
+
+    let path = base_dir.join(&final_relative);
     detect_conflicts(&path, branch.as_deref(), existing)?;
 
     let display_name = branch.clone().unwrap_or_else(|| identifier.clone());

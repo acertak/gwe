@@ -4,9 +4,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, Result, anyhow};
+use glob::glob;
+use tracing::warn;
 
 use crate::config::Config;
-use crate::config::types::{CommandHook, CopyHook, Hook};
+use crate::config::types::{CommandHook, CopyHook, GlobCopyHook, Hook};
 
 pub struct HookExecutor<'a> {
     config: &'a Config,
@@ -41,6 +43,9 @@ impl<'a> HookExecutor<'a> {
             match hook {
                 Hook::Copy(copy_hook) => {
                     self.execute_copy_hook(writer, copy_hook, worktree_path)?
+                }
+                Hook::GlobCopy(glob_hook) => {
+                    self.execute_glob_copy_hook(writer, glob_hook, worktree_path)?
                 }
                 Hook::Command(command_hook) => {
                     self.execute_command_hook(writer, command_hook, worktree_path)?
@@ -93,6 +98,53 @@ impl<'a> HookExecutor<'a> {
                 .map(|_| ())
                 .with_context(|| format!("failed to copy file to {}", dst_path.display()))
         }
+    }
+
+    fn execute_glob_copy_hook<W: Write>(
+        &self,
+        writer: &mut W,
+        hook: &GlobCopyHook,
+        worktree_path: &Path,
+    ) -> Result<()> {
+        let pattern = self.repo_root.join(&hook.pattern);
+        let pattern_str = pattern.to_string_lossy();
+
+        writeln!(writer, "  Matching pattern: {}", hook.pattern)?;
+
+        for entry in glob(&pattern_str).context("Failed to read glob pattern")? {
+            match entry {
+                Ok(path) => {
+                    let relative = match path.strip_prefix(self.repo_root) {
+                        Ok(p) => p,
+                        Err(_) => continue,
+                    };
+                    
+                    let dest = worktree_path.join(relative);
+
+                    if let Some(parent) = dest.parent() {
+                        fs::create_dir_all(parent).with_context(|| {
+                            format!("failed to create destination directory {}", parent.display())
+                        })?;
+                    }
+
+                    writeln!(
+                        writer,
+                        "    Copying: {} → {}",
+                        self.relative_to_repo(&path),
+                        self.relative_to_worktree(worktree_path, &dest)
+                    )?;
+
+                    if path.is_dir() {
+                        copy_dir_recursive(&path, &dest)?;
+                    } else {
+                        fs::copy(&path, &dest)
+                            .with_context(|| format!("failed to copy file to {}", dest.display()))?;
+                    }
+                }
+                Err(e) => warn!("Glob error: {}", e),
+            }
+        }
+        Ok(())
     }
 
     fn execute_command_hook<W: Write>(

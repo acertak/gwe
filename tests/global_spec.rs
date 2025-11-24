@@ -11,7 +11,7 @@ fn repo_flag_allows_running_outside_git_directory() {
     let elsewhere = TempDir::new().expect("temp");
     let repo_path = repo.path().to_path_buf();
     #[allow(deprecated)]
-    let mut cmd = AssertCommand::cargo_bin("wtw").expect("wtw binary");
+    let mut cmd = AssertCommand::cargo_bin("gwe").expect("gwe binary");
     let output = cmd
         .current_dir(elsewhere.path())
         .args([
@@ -67,12 +67,12 @@ fn git_failure_returns_exit_code_three() {
 #[test]
 fn help_option_displays_usage_information() {
     #[allow(deprecated)]
-    let mut cmd = AssertCommand::cargo_bin("wtw").expect("wtw binary");
+    let mut cmd = AssertCommand::cargo_bin("gwe").expect("gwe binary");
     cmd.arg("--help")
         .assert()
         .success()
         .stdout(predicate::str::contains("Windows-native worktree helper"))
-        .stdout(predicate::str::contains("Usage: wtw"))
+        .stdout(predicate::str::contains("Usage: gwe"))
         .stdout(predicate::str::contains("Commands:"))
         .stdout(predicate::str::contains("shell-init"));
 }
@@ -80,7 +80,7 @@ fn help_option_displays_usage_information() {
 #[test]
 fn version_option_prints_package_version() {
     #[allow(deprecated)]
-    let mut cmd = AssertCommand::cargo_bin("wtw").expect("wtw binary");
+    let mut cmd = AssertCommand::cargo_bin("gwe").expect("gwe binary");
     cmd.arg("--version")
         .assert()
         .success()

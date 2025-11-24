@@ -16,6 +16,19 @@ pub fn run(
     config: &Config,
     target: Option<String>,
 ) -> Result<()> {
+    let resolved = resolve_worktree_path(repo, git, config, target)?;
+    
+    let mut stdout = io::stdout().lock();
+    writeln!(stdout, "{}", resolved.display())?;
+    Ok(())
+}
+
+pub fn resolve_worktree_path(
+    repo: &RepoContext,
+    git: &GitRunner,
+    config: &Config,
+    target: Option<String>,
+) -> Result<PathBuf> {
     let target = target
         .ok_or_else(|| AppError::user("worktree name is required"))
         .map_err(anyhow::Error::from)?;
@@ -32,10 +45,7 @@ pub fn run(
         .ok_or_else(|| worktree_not_found(&target, &worktrees, &base_dir, &repo_name))
         .map_err(anyhow::Error::from)?;
 
-    let mut stdout = io::stdout().lock();
-    let normalized = common::normalize_path(&resolved);
-    writeln!(stdout, "{}", normalized.display())?;
-    Ok(())
+    Ok(common::normalize_path(&resolved))
 }
 
 fn sanitize_target(target: &str) -> String {
@@ -153,10 +163,10 @@ fn worktree_not_found(
     available.dedup();
 
     let suggestion = if available.is_empty() {
-        String::from("Run 'wtw list' to see available worktrees.")
+        String::from("Run 'gwe list' to see available worktrees.")
     } else {
         format!(
-            "Available worktrees: {}\nRun 'wtw list' to see available worktrees.",
+            "Available worktrees: {}\nRun 'gwe list' to see available worktrees.",
             available.join(", ")
         )
     };
@@ -218,7 +228,7 @@ mod tests {
             message.contains("Available worktrees"),
             "expected suggestions, got: {message}"
         );
-        assert!(message.contains("Run 'wtw list'"));
+        assert!(message.contains("Run 'gwe list'"));
         assert!(message.contains("@"));
     }
 

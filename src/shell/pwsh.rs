@@ -1,27 +1,27 @@
 const SCRIPT: &str = r#"$ErrorActionPreference = 'Stop'
 
-function Get-WtwExePath {
-    $cmd = Get-Command wtw.exe -ErrorAction SilentlyContinue
+function Get-GweExePath {
+    $cmd = Get-Command gwe.exe -ErrorAction SilentlyContinue
     if ($cmd) {
         return $cmd.Source
     }
 
-    # フォールバック（PATH 上にある wtw を探す）
-    $cmd = Get-Command wtw -CommandType Application -ErrorAction SilentlyContinue
+    # フォールバック（PATH 上にある gwe を探す）
+    $cmd = Get-Command gwe -CommandType Application -ErrorAction SilentlyContinue
     if ($cmd) {
         return $cmd.Source
     }
 
-    throw 'wtw executable not found on PATH.'
+    throw 'gwe executable not found on PATH.'
 }
 
-function wtw {
+function gwe {
     param(
         [Parameter(ValueFromRemainingArguments = $true)]
         [string[]] $Args
     )
 
-    $exe = Get-WtwExePath
+    $exe = Get-GweExePath
     $output = & $exe @Args
     $exitCode = $LASTEXITCODE
 
@@ -39,7 +39,7 @@ function wtw {
     $global:LASTEXITCODE = $exitCode
 }
 
-Register-ArgumentCompleter -Native -CommandName wtw -ScriptBlock {
+Register-ArgumentCompleter -Native -CommandName gwe -ScriptBlock {
     param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
 
     $commands = @('add','list','remove','cd','shell-init')
@@ -57,7 +57,7 @@ Register-ArgumentCompleter -Native -CommandName wtw -ScriptBlock {
     $subcommand = $elements[1]
 
     if ($subcommand -eq 'cd') {
-        $exe = Get-WtwExePath
+        $exe = Get-GweExePath
         $json = & $exe list --json 2>$null
         if (-not $?) {
             return
@@ -103,7 +103,7 @@ mod tests {
     #[test]
     fn script_contains_function_and_completer() {
         let script = script();
-        assert!(script.contains("function wtw"));
+        assert!(script.contains("function gwe"));
         assert!(script.contains("Register-ArgumentCompleter"));
     }
 }

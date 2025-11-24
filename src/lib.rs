@@ -25,6 +25,22 @@ pub fn run() -> Result<ExitCode> {
             let git = git::GitRunner::new(repo.clone());
             worktree::add::run(&repo, &git, &config, &cmd)?;
         }
+        cli::Command::Config(cmd) => {
+            let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
+            shell::config::run(&repo, cmd)?;
+        }
+        cli::Command::Editor(cmd) => {
+            let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
+            let config = config::load_config(&repo)?;
+            let git = git::GitRunner::new(repo.clone());
+            worktree::tool::open_editor(&repo, &git, &config, &cmd)?;
+        }
+        cli::Command::Ai(cmd) => {
+            let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
+            let config = config::load_config(&repo)?;
+            let git = git::GitRunner::new(repo.clone());
+            worktree::tool::run_ai(&repo, &git, &config, &cmd)?;
+        }
         cli::Command::List(cmd) => {
             let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
             let config = config::load_config(&repo)?;
@@ -36,11 +52,11 @@ pub fn run() -> Result<ExitCode> {
                 worktree::list::ListOptions { json: cmd.json },
             )?;
         }
-        cli::Command::Remove(cmd) => {
+        cli::Command::Rm(cmd) => {
             let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
             let config = config::load_config(&repo)?;
             let git = git::GitRunner::new(repo.clone());
-            worktree::remove::run(&repo, &git, &config, &cmd)?;
+            worktree::rm::run(&repo, &git, &config, &cmd)?;
         }
         cli::Command::Cd(cmd) => {
             let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
@@ -56,11 +72,22 @@ pub fn run() -> Result<ExitCode> {
                 };
                 shell::init::init_pwsh(&profile)?;
             }
+            cli::ShellKind::Bash => {
+                let profile = match &cmd.profile {
+                    Some(path) => path.clone(),
+                    None => shell::init::default_bash_profile()?,
+                };
+                shell::init::init_bash(&profile)?;
+            }
+            cli::ShellKind::Zsh => {
+                let profile = match &cmd.profile {
+                    Some(path) => path.clone(),
+                    None => shell::init::default_zsh_profile()?,
+                };
+                shell::init::init_zsh(&profile)?;
+            }
             cli::ShellKind::Cmd => {
                 return Err(anyhow!("shell 'cmd' is not supported yet"));
-            }
-            cli::ShellKind::Bash => {
-                return Err(anyhow!("shell 'bash' is not supported yet"));
             }
         },
         cli::Command::ShellInit(cmd) => match cmd.shell {
@@ -68,11 +95,16 @@ pub fn run() -> Result<ExitCode> {
                 print!("{}", shell::pwsh::script());
                 io::stdout().flush()?;
             }
+            cli::ShellKind::Bash => {
+                print!("{}", shell::bash::script());
+                io::stdout().flush()?;
+            }
+            cli::ShellKind::Zsh => {
+                print!("{}", shell::zsh::script());
+                io::stdout().flush()?;
+            }
             cli::ShellKind::Cmd => {
                 return Err(anyhow!("shell 'cmd' is not supported yet"));
-            }
-            cli::ShellKind::Bash => {
-                return Err(anyhow!("shell 'bash' is not supported yet"));
             }
         },
     }

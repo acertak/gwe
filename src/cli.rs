@@ -4,7 +4,7 @@ use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "wtw",
+    name = "gwe",
     version,
     about = "Windows-native worktree helper compatible with wtp"
 )]
@@ -35,7 +35,7 @@ pub enum Command {
     /// 登録済み worktree を一覧表示
     List(ListCommand),
     /// worktree を削除
-    Remove(RemoveCommand),
+    Rm(RmCommand),
     /// 指定 worktree の絶対パスを出力
     Cd(CdCommand),
     /// シェル統合をプロファイルにインストール
@@ -43,6 +43,69 @@ pub enum Command {
     /// シェル初期化スクリプトを出力
     #[command(name = "shell-init")]
     ShellInit(ShellInitCommand),
+    /// 設定の確認・変更
+    Config(ConfigCommand),
+    /// エディタで開く
+    Editor(EditorCommand),
+    /// AIツールを起動
+    Ai(AiCommand),
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct EditorCommand {
+    /// 対象 worktree
+    #[arg(value_name = "WORKTREE")]
+    pub target: Option<String>,
+    /// 使用するエディタ (設定を上書き)
+    #[arg(long)]
+    pub editor: Option<String>,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct AiCommand {
+    /// 対象 worktree
+    #[arg(value_name = "WORKTREE")]
+    pub target: Option<String>,
+    /// 使用するAIツール (設定を上書き)
+    #[arg(long)]
+    pub ai: Option<String>,
+    /// ツールに渡す引数
+    #[arg(last = true)]
+    pub args: Vec<String>,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct ConfigCommand {
+    #[command(subcommand)]
+    pub action: ConfigAction,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ConfigAction {
+    /// 設定値を取得
+    Get {
+        key: String,
+    },
+    /// 設定値を設定
+    Set {
+        key: String,
+        value: String,
+        #[arg(long)]
+        global: bool,
+    },
+    /// 値を追加（マルチバリュー用）
+    Add {
+        key: String,
+        value: String,
+        #[arg(long)]
+        global: bool,
+    },
+    /// 設定値を削除
+    Unset {
+        key: String,
+        #[arg(long)]
+        global: bool,
+    },
 }
 
 #[derive(Args, Debug, Clone)]
@@ -56,6 +119,9 @@ pub struct AddCommand {
     /// 追跡する remote/branch
     #[arg(long = "track", value_name = "REMOTE/BRANCH")]
     pub track: Option<String>,
+    /// 作成後にエディタで開く
+    #[arg(short = 'o', long = "open")]
+    pub open: bool,
 }
 
 #[derive(Args, Debug, Clone, Copy)]
@@ -66,7 +132,7 @@ pub struct ListCommand {
 }
 
 #[derive(Args, Debug, Clone)]
-pub struct RemoveCommand {
+pub struct RmCommand {
     /// 削除対象の worktree
     #[arg(value_name = "WORKTREE")]
     pub target: Option<String>,
@@ -74,10 +140,10 @@ pub struct RemoveCommand {
     #[arg(short = 'f', long = "force")]
     pub force: bool,
     /// 対応ブランチも削除
-    #[arg(long = "with-branch")]
+    #[arg(short = 'b', long = "with-branch")]
     pub with_branch: bool,
     /// ブランチが別の worktree にチェックアウトされていても削除
-    #[arg(long = "force-branch")]
+    #[arg(long = "force-branch", visible_alias = "fb")]
     pub force_branch: bool,
 }
 
@@ -98,7 +164,7 @@ pub struct ShellInitCommand {
 #[derive(Args, Debug, Clone)]
 pub struct InitCommand {
     /// シェル種別（省略時は pwsh）
-    #[arg(value_enum, default_value_t = ShellKind::Pwsh)]
+    #[arg(long = "shell", value_enum, default_value_t = ShellKind::Pwsh)]
     pub shell: ShellKind,
     /// シェルのプロファイルファイルパス（例: $PROFILE）。省略時は既定の PowerShell プロファイルを使用
     #[arg(value_name = "PROFILE_PATH")]
@@ -111,6 +177,7 @@ pub enum ShellKind {
     Pwsh,
     Cmd,
     Bash,
+    Zsh,
 }
 
 impl ShellKind {
@@ -119,6 +186,7 @@ impl ShellKind {
             ShellKind::Pwsh => "pwsh",
             ShellKind::Cmd => "cmd",
             ShellKind::Bash => "bash",
+            ShellKind::Zsh => "zsh",
         }
     }
 }

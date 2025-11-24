@@ -4,7 +4,7 @@ WTW Specification
 1. Overview
 -----------
 
-WTW (Worktree Pro for Windows) is a Windows‑native helper CLI for managing Git
+GWE (Git Worktree Extension) is a Windows‑native helper CLI for managing Git
 worktrees. It is implemented in Rust and is designed to be highly compatible
 with the original **wtp (Worktree Plus)** while providing a first‑class
 experience on Windows 11 and PowerShell.
@@ -12,8 +12,8 @@ experience on Windows 11 and PowerShell.
 This document specifies:
 
 - The command‑line interface (global options and subcommands).
-- The configuration file format (`.wtp.yml`) as interpreted by WTW.
-- How WTW integrates with Git and `git worktree`.
+- The configuration file format (`.wtp.yml`) as interpreted by GWE.
+- How GWE integrates with Git and `git worktree`.
 - The post‑create hook mechanism.
 - PowerShell shell integration.
 - Logging behavior and exit codes.
@@ -29,13 +29,13 @@ tests in this repository. No speculative or planned behavior is described.
 - **Main worktree**  
   The primary worktree of a Git repository (the one corresponding to the
   `.git` directory). In `git worktree list --porcelain`, it is the first
-  `worktree` entry. WTW marks this entry as `is_main = true`.
+  `worktree` entry. GWE marks this entry as `is_main = true`.
 
 - **Additional worktree**  
   Any worktree managed by `git worktree` other than the main worktree.
 
 - **Base directory (`base_dir`)**  
-  The root directory under which WTW manages worktrees by default. It is
+  The root directory under which GWE manages worktrees by default. It is
   configured via `.wtp.yml` and defaults to `../worktree` relative to the
   main repository root.
 
@@ -45,7 +45,7 @@ tests in this repository. No speculative or planned behavior is described.
   specially.
 
 - **Display name**  
-  The human‑friendly name shown in `wtw list` and used in places where a
+  The human‑friendly name shown in `gwe list` and used in places where a
   compact identifier is useful. For the main worktree it is `"@"`. For other
   worktrees under `base_dir`, the display name is the relative path from
   `base_dir` to the worktree directory (joined using the platform’s path
@@ -69,7 +69,7 @@ tests in this repository. No speculative or planned behavior is described.
 The crate is structured into modules corresponding to major responsibilities:
 
 - `main`  
-  OS entrypoint. Calls `wtw::run()` and maps errors to exit codes.
+  OS entrypoint. Calls `gwe::run()` and maps errors to exit codes.
 
 - `lib`  
   Exposes the `run()` function, parses CLI options via Clap, initializes
@@ -98,12 +98,12 @@ The crate is structured into modules corresponding to major responsibilities:
 - `worktree`  
   Implementation of subcommands operating on worktrees:
 
-  - `worktree::add`: `wtw add` behavior (worktree creation, path mapping,
+  - `worktree::add`: `gwe add` behavior (worktree creation, path mapping,
     conflict detection, post‑create hooks).
-  - `worktree::list`: `wtw list` behavior (table and JSON output).
-  - `worktree::remove`: `wtw remove` behavior (worktree and optional branch
+  - `worktree::list`: `gwe list` behavior (table and JSON output).
+  - `worktree::remove`: `gwe remove` behavior (worktree and optional branch
     removal).
-  - `worktree::resolve`: `wtw cd` behavior (name resolution).
+  - `worktree::resolve`: `gwe cd` behavior (name resolution).
   - `worktree::common`: cross‑cutting helpers for path normalization,
     display names, and “managed” checks.
 
@@ -114,7 +114,7 @@ The crate is structured into modules corresponding to major responsibilities:
 - `shell`  
   Shell integration:
 
-  - `shell::init`: initialization of the PowerShell profile (`wtw init`).
+  - `shell::init`: initialization of the PowerShell profile (`gwe init`).
   - `shell::pwsh`: PowerShell function and argument completer script.
   - `shell::cmd`, `shell::bash`: placeholders (currently unused).
 
@@ -158,7 +158,7 @@ Global options (available before any subcommand):
   working directory. If the path points to a file, its parent directory is
   used. If the resulting directory does not exist, an error is returned.
 
-  The `--repo` flag is validated in integration tests by running `wtw` from
+  The `--repo` flag is validated in integration tests by running `gwe` from
   outside the repository and checking that `list --json` still succeeds.
 
 
@@ -177,7 +177,7 @@ The `Command` enum defines the available subcommands:
 Each subcommand is documented below.
 
 
-4.2.1 `wtw add`
+4.2.1 `gwe add`
 ^^^^^^^^^^^^^^^
 
 **Purpose**  
@@ -187,7 +187,7 @@ creating or tracking a branch, and then run post‑create hooks.
 **Synopsis**
 
 ```text
-wtw add [OPTIONS] [BRANCH_OR_COMMIT]
+gwe add [OPTIONS] [BRANCH_OR_COMMIT]
 ```
 
 **Options (AddCommand)**
@@ -237,7 +237,7 @@ Behavior is determined from the combination of `--branch`, `--track`, and
    - `BRANCH_OR_COMMIT` is required. If it is missing or blank, the command
      fails with a user error: `"branch or commit is required"`.
    - The commitish is set to the provided value.
-   - No new branch is created by WTW; `git worktree add` is invoked with only
+   - No new branch is created by GWE; `git worktree add` is invoked with only
      the path and commitish.
 
 These error messages and exit code 1 (user error) are verified in tests.
@@ -253,7 +253,7 @@ uses:
 - Relative `base_dir` resolved against `main_root`; absolute `base_dir`
   left as‑is.
 
-Within the base directory, WTW derives a relative path from the branch or
+Within the base directory, GWE derives a relative path from the branch or
 commit identifier:
 
 - The primary identifier is the branch name if known; otherwise the commitish.
@@ -270,7 +270,7 @@ The final worktree path is `base_dir.join(relative_path)`.
 
 **Conflict detection**
 
-Before creating the worktree, WTW checks for conflicts using:
+Before creating the worktree, GWE checks for conflicts using:
 
 1. Existing worktrees from `git worktree list --porcelain`.
 2. The filesystem.
@@ -306,7 +306,7 @@ Checks:
 
 **Git invocation**
 
-WTW constructs arguments to `git worktree add` as follows:
+GWE constructs arguments to `git worktree add` as follows:
 
 - Always: `["worktree", "add"]`.
 - If tracking: appends `"--track"`.
@@ -315,7 +315,7 @@ WTW constructs arguments to `git worktree add` as follows:
 - If a commitish is set: appends the commitish.
 
 The command is executed via `GitRunner::run`. If Git exits with a non‑success
-status, WTW:
+status, GWE:
 
 - Extracts `stderr`, trims it, and:
   - If non‑empty, surfaces it as a Git error message.
@@ -325,7 +325,7 @@ These failures are treated as Git errors and mapped to exit code 3.
 
 **User‑visible output**
 
-On success, `wtw add` prints a single line to standard output:
+On success, `gwe add` prints a single line to standard output:
 
 ```text
 Created worktree '<display_name>' at <absolute_path>
@@ -334,12 +334,12 @@ Created worktree '<display_name>' at <absolute_path>
 After that, it executes post‑create hooks (see section 6). The hooks executor
 prints progress messages and hook‑specific output.
 
-If any hook fails, `wtw add` fails (the error is propagated and printed by
+If any hook fails, `gwe add` fails (the error is propagated and printed by
 `main`). Hook failures are treated as internal errors and mapped to exit code
 10.
 
 
-4.2.2 `wtw list`
+4.2.2 `gwe list`
 ^^^^^^^^^^^^^^^^
 
 **Purpose**  
@@ -349,7 +349,7 @@ human‑readable table or as JSON suitable for tooling and completion.
 **Synopsis**
 
 ```text
-wtw list [--json]
+gwe list [--json]
 ```
 
 **Options (ListCommand)**
@@ -359,7 +359,7 @@ wtw list [--json]
 
 **Data collection**
 
-`wtw list` performs the following steps:
+`gwe list` performs the following steps:
 
 1. Calls `git worktree list --porcelain` via `GitRunner`.
 2. Parses the output into `WorktreeInfo` entries. Each entry contains:
@@ -423,7 +423,7 @@ For each row:
 
 **JSON output**
 
-When `--json` is provided, `wtw list` emits pretty‑printed JSON:
+When `--json` is provided, `gwe list` emits pretty‑printed JSON:
 
 ```json
 [
@@ -454,7 +454,7 @@ Fields:
 - `is_current`: whether this is the current worktree.
 
 
-4.2.3 `wtw remove`
+4.2.3 `gwe remove`
 ^^^^^^^^^^^^^^^^^^
 
 **Purpose**  
@@ -463,14 +463,14 @@ Remove a managed worktree, and optionally remove its corresponding branch.
 **Synopsis**
 
 ```text
-wtw remove [OPTIONS] <WORKTREE>
+gwe remove [OPTIONS] <WORKTREE>
 ```
 
 **Options (RemoveCommand)**
 
 - `WORKTREE` (positional, required)  
   Target worktree identifier. Resolution follows the same rules as for
-  `wtw cd` (see section 4.2.4), except that the main worktree is never
+  `gwe cd` (see section 4.2.4), except that the main worktree is never
   removable.
 
 - `-f, --force`  
@@ -492,7 +492,7 @@ wtw remove [OPTIONS] <WORKTREE>
 
 **Target resolution**
 
-`wtw remove`:
+`gwe remove`:
 
 1. Enumerates `WorktreeInfo` entries from `git worktree list --porcelain`.
 2. Computes the effective `base_dir`.
@@ -512,14 +512,14 @@ If no match is found, a user error is returned with a message of the form:
 ```text
 worktree '<target>' not found
 Available worktrees: <name1>, <name2>, ...
-Run 'wtw list' to see available worktrees.
+Run 'gwe list' to see available worktrees.
 ```
 
 The list of available names includes display names of managed worktrees.
 
 **Current worktree protection**
 
-Before removal, WTW compares:
+Before removal, GWE compares:
 
 - The normalized path of the current worktree (from `RepoContext`), and
 - The normalized path of the target worktree.
@@ -559,7 +559,7 @@ All such failures are treated as Git errors and mapped to exit code 3.
 
 **User‑visible output**
 
-On successful worktree removal, WTW prints:
+On successful worktree removal, GWE prints:
 
 ```text
 Removed worktree '<target>' at <absolute_path>
@@ -572,7 +572,7 @@ Removed branch '<branch>'
 ```
 
 
-4.2.4 `wtw cd`
+4.2.4 `gwe cd`
 ^^^^^^^^^^^^^^
 
 **Purpose**  
@@ -582,7 +582,7 @@ PowerShell integration, this enables shell‑level directory changes.
 **Synopsis**
 
 ```text
-wtw cd <WORKTREE>
+gwe cd <WORKTREE>
 ```
 
 **Options (CdCommand)**
@@ -600,14 +600,14 @@ wtw cd <WORKTREE>
 The input is first sanitized by:
 
 - Trimming leading/trailing whitespace.
-- Removing any trailing `*` (e.g. a copied value from `wtw list` where the
+- Removing any trailing `*` (e.g. a copied value from `gwe list` where the
   current worktree is marked with an asterisk).
 
 If the sanitized value is empty, the command fails with the error above.
 
 **Resolution algorithm**
 
-`wtw cd`:
+`gwe cd`:
 
 1. Enumerates `WorktreeInfo` entries from `git worktree list --porcelain`.
 2. Computes:
@@ -639,7 +639,7 @@ If the sanitized value is empty, the command fails with the error above.
 ```text
 worktree '<target>' not found
 Available worktrees: <names...>
-Run 'wtw list' to see available worktrees.
+Run 'gwe list' to see available worktrees.
 ```
 
 The list of available names includes `"@"`, the main branch name (if any),
@@ -647,29 +647,29 @@ the repository name, and the display names of managed worktrees.
 
 **Output**
 
-On success, `wtw cd` prints the normalized absolute path of the resolved
+On success, `gwe cd` prints the normalized absolute path of the resolved
 worktree to standard output, followed by a newline. No other output is
 emitted in the success path.
 
 Integration tests assert that:
 
-- `wtw cd @` resolves to the repository root.
-- `wtw cd <display_name>` resolves correctly after `wtw add`.
+- `gwe cd @` resolves to the repository root.
+- `gwe cd <display_name>` resolves correctly after `gwe add`.
 - Errors for unknown worktrees include both the “Available worktrees” list
-  and the `Run 'wtw list'` hint.
+  and the `Run 'gwe list'` hint.
 
 
-4.2.5 `wtw init`
+4.2.5 `gwe init`
 ^^^^^^^^^^^^^^^^
 
 **Purpose**  
 Install shell integration into a PowerShell profile by appending a function
-and argument completer for `wtw`.
+and argument completer for `gwe`.
 
 **Synopsis**
 
 ```text
-wtw init [--shell <SHELL>] [PROFILE_PATH]
+gwe init [--shell <SHELL>] [PROFILE_PATH]
 ```
 
 **Options (InitCommand)**
@@ -683,7 +683,7 @@ wtw init [--shell <SHELL>] [PROFILE_PATH]
 
 - `PROFILE_PATH` (optional positional path)  
   Path to the profile file to be modified. If omitted and `--shell pwsh` is
-  used, WTW computes a default profile path using the `USERPROFILE` or `HOME`
+  used, GWE computes a default profile path using the `USERPROFILE` or `HOME`
   environment variable:
 
   ```text
@@ -696,11 +696,11 @@ wtw init [--shell <SHELL>] [PROFILE_PATH]
 
   - Ensures the profile directory exists, creating it if necessary.
   - Reads the existing profile content (if any).
-  - If the content already contains the marker line `# wtw shell integration`,
+  - If the content already contains the marker line `# gwe shell integration`,
     it performs no changes (idempotent).
   - Otherwise, opens the profile file in append mode, optionally inserts a
     newline, and appends:
-    - The marker line `# wtw shell integration`.
+    - The marker line `# gwe shell integration`.
     - The PowerShell script from `shell::pwsh::script()`.
 
 - For `cmd` or `bash`:
@@ -712,7 +712,7 @@ wtw init [--shell <SHELL>] [PROFILE_PATH]
   These errors are treated as user errors (exit code 1).
 
 
-4.2.6 `wtw shell-init`
+4.2.6 `gwe shell-init`
 ^^^^^^^^^^^^^^^^^^^^^^
 
 **Purpose**  
@@ -722,7 +722,7 @@ the profile file. This allows manual inspection or composition.
 **Synopsis**
 
 ```text
-wtw shell-init <SHELL>
+gwe shell-init <SHELL>
 ```
 
 **Options (ShellInitCommand)**
@@ -739,16 +739,16 @@ wtw shell-init <SHELL>
 
 - For `cmd` or `bash`:
 
-  - Returns an error with the same messages as `wtw init` for unsupported
+  - Returns an error with the same messages as `gwe init` for unsupported
     shells:
     - `"shell 'cmd' is not supported yet"`
     - `"shell 'bash' is not supported yet"`
 
 Integration tests check that:
 
-- `wtw shell-init pwsh` prints a script containing `function wtw` and
+- `gwe shell-init pwsh` prints a script containing `function gwe` and
   `Register-ArgumentCompleter`.
-- `wtw shell-init cmd` fails with the appropriate error message.
+- `gwe shell-init cmd` fails with the appropriate error message.
 
 Note: The `shell::cmd` and `shell::bash` modules currently expose `script()`
 functions that return empty strings, but these are not reachable from CLI
@@ -758,7 +758,7 @@ entrypoints because `cmd` and `bash` are explicitly rejected.
 5. Configuration File Specification (`.wtp.yml`)
 -----------------------------------------------
 
-WTW reads configuration from a file named `.wtp.yml` located in the main
+GWE reads configuration from a file named `.wtp.yml` located in the main
 repository root (the root of the main worktree). The format is a YAML
 document parsed into the following Rust types (using `serde`).
 
@@ -771,7 +771,7 @@ document parsed into the following Rust types (using `serde`).
   <main_root>/.wtp.yml
   ```
 
-- If the file does not exist, WTW uses `Config::default()`, which corresponds
+- If the file does not exist, GWE uses `Config::default()`, which corresponds
   to:
 
   ```yaml
@@ -786,7 +786,7 @@ document parsed into the following Rust types (using `serde`).
   default values.
 
 - If the path exists but is not a regular file (e.g., a directory),
-  WTW returns a configuration error with a message containing:
+  GWE returns a configuration error with a message containing:
 
   ```text
   configuration path is not a regular file: <path>
@@ -794,13 +794,13 @@ document parsed into the following Rust types (using `serde`).
 
   This is mapped to exit code 2.
 
-- If the file cannot be read, WTW returns a configuration error of the form:
+- If the file cannot be read, GWE returns a configuration error of the form:
 
   ```text
   failed to read config file <path>: <io_error>
   ```
 
-- If the YAML cannot be parsed, WTW returns a configuration error:
+- If the YAML cannot be parsed, GWE returns a configuration error:
 
   ```text
   failed to parse config file <path>: <serde_error>
@@ -837,7 +837,7 @@ YAML mapping:
   - Default: see `Hooks` below.
 
 No `deny_unknown_fields` attribute is applied to `Config` or `Defaults`,
-which means additional unknown keys at these levels are ignored by WTW
+which means additional unknown keys at these levels are ignored by GWE
 rather than causing a parse error.
 
 
@@ -866,7 +866,7 @@ pub struct Defaults {
     - If `base_dir` is relative, it is joined to the canonicalized main
       repository root.
   - On Windows, extended path prefixes like `\\?\` are stripped in normalized
-    paths used by WTW.
+    paths used by GWE.
 
 
 5.4 Hooks
@@ -879,7 +879,7 @@ pub struct Hooks {
 ```
 
 Currently, only `hooks.post_create` is supported. Other hook lists are not
-read or used by WTW.
+read or used by GWE.
 
 Each `Hook` is a tagged enum:
 
@@ -927,7 +927,7 @@ Fields:
 
 Behavior:
 
-- At execution time, WTW:
+- At execution time, GWE:
 
   - Resolves `from` against the main repository root if relative.
   - Resolves `to` against the new worktree path if relative.
@@ -937,13 +937,13 @@ Behavior:
 
 - If `to` refers to a directory:
 
-  - WTW creates all necessary parent directories.
+  - GWE creates all necessary parent directories.
   - If the source is a directory, it recursively copies all contents.
   - If the source is a file, it copies the file to the target file path,
     creating parent directories as needed.
 
 - All errors from filesystem operations are wrapped with contextual messages
-  and cause the hook (and thus `wtw add`) to fail.
+  and cause the hook (and thus `gwe add`) to fail.
 
 Validation:
 
@@ -977,7 +977,7 @@ Fields:
 
 Behavior:
 
-- WTW logs the command being executed to the hook output.
+- GWE logs the command being executed to the hook output.
 - It then spawns a shell:
 
   - On Windows: `cmd /C <command>`.
@@ -1009,7 +1009,7 @@ Behavior:
   command exited with status <status>
   ```
 
-  and `wtw add` fails accordingly (exit code 10).
+  and `gwe add` fails accordingly (exit code 10).
 
 Validation:
 
@@ -1023,7 +1023,7 @@ Validation:
 Hook execution is performed by `HookExecutor`, which is created with a
 reference to the loaded `Config` and the main repository root.
 
-On `wtw add` success, WTW:
+On `gwe add` success, GWE:
 
 1. Constructs a `HookExecutor`.
 2. Calls `execute_post_create_hooks` with:
