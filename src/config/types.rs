@@ -15,10 +15,6 @@ pub struct Config {
     #[serde(default)]
     pub hooks: Hooks,
     #[serde(default)]
-    pub editor: Editor,
-    #[serde(default)]
-    pub ai: Ai,
-    #[serde(default)]
     pub default_branch: Option<String>,
 }
 
@@ -28,8 +24,6 @@ impl Default for Config {
             version: default_version(),
             defaults: Defaults::default(),
             hooks: Hooks::default(),
-            editor: Editor::default(),
-            ai: Ai::default(),
             default_branch: None,
         }
     }
@@ -57,16 +51,6 @@ impl Default for Defaults {
             base_dir: default_base_dir(),
         }
     }
-}
-
-#[derive(Debug, Clone, Default, Deserialize)]
-pub struct Editor {
-    pub default: Option<String>,
-}
-
-#[derive(Debug, Clone, Default, Deserialize)]
-pub struct Ai {
-    pub default: Option<String>,
 }
 
 impl Defaults {

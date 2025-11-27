@@ -6,7 +6,7 @@ use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 #[command(
     name = "gwe",
     version,
-    about = "Windows-native worktree helper compatible with wtp"
+    about = "Windows-native worktree helper"
 )]
 pub struct Cli {
     #[command(flatten)]
@@ -45,30 +45,19 @@ pub enum Command {
     ShellInit(ShellInitCommand),
     /// 設定の確認・変更
     Config(ConfigCommand),
-    /// エディタで開く
-    Editor(EditorCommand),
-    /// AIツールを起動
-    Ai(AiCommand),
+    /// Cursor を起動
+    Cursor(ToolCommand),
+    /// Windsurf を起動
+    Wind(ToolCommand),
+    /// Antigravity を起動
+    Anti(ToolCommand),
 }
 
 #[derive(Args, Debug, Clone)]
-pub struct EditorCommand {
+pub struct ToolCommand {
     /// 対象 worktree
     #[arg(value_name = "WORKTREE")]
     pub target: Option<String>,
-    /// 使用するエディタ (設定を上書き)
-    #[arg(long)]
-    pub editor: Option<String>,
-}
-
-#[derive(Args, Debug, Clone)]
-pub struct AiCommand {
-    /// 対象 worktree
-    #[arg(value_name = "WORKTREE")]
-    pub target: Option<String>,
-    /// 使用するAIツール (設定を上書き)
-    #[arg(long)]
-    pub ai: Option<String>,
     /// ツールに渡す引数
     #[arg(last = true)]
     pub args: Vec<String>,

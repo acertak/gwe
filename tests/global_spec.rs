@@ -37,21 +37,6 @@ fn repo_flag_allows_running_outside_git_directory() {
 }
 
 #[test]
-fn invalid_config_reports_exit_code_two() {
-    let repo = TestRepo::new();
-    repo.write_config("version: [");
-    let output = repo
-        .command()
-        .arg("list")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("failed to parse config file"))
-        .get_output()
-        .clone();
-    assert_eq!(output.status.code(), Some(2));
-}
-
-#[test]
 fn git_failure_returns_exit_code_three() {
     let repo = TestRepo::new();
     let output = repo

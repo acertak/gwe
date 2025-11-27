@@ -29,17 +29,23 @@ pub fn run() -> Result<ExitCode> {
             let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
             shell::config::run(&repo, cmd)?;
         }
-        cli::Command::Editor(cmd) => {
+        cli::Command::Cursor(cmd) => {
             let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
             let config = config::load_config(&repo)?;
             let git = git::GitRunner::new(repo.clone());
-            worktree::tool::open_editor(&repo, &git, &config, &cmd)?;
+            worktree::tool::run_tool_command(&repo, &git, &config, &cmd, "cursor")?;
         }
-        cli::Command::Ai(cmd) => {
+        cli::Command::Wind(cmd) => {
             let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
             let config = config::load_config(&repo)?;
             let git = git::GitRunner::new(repo.clone());
-            worktree::tool::run_ai(&repo, &git, &config, &cmd)?;
+            worktree::tool::run_tool_command(&repo, &git, &config, &cmd, "windsurf")?;
+        }
+        cli::Command::Anti(cmd) => {
+            let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
+            let config = config::load_config(&repo)?;
+            let git = git::GitRunner::new(repo.clone());
+            worktree::tool::run_tool_command(&repo, &git, &config, &cmd, "antigravity")?;
         }
         cli::Command::List(cmd) => {
             let repo = git::rev::RepoContext::discover(globals.repo.clone())?;

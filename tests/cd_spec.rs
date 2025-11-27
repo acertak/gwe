@@ -25,7 +25,8 @@ fn cd_accepts_display_name() {
     let repo = TestRepo::new();
     repo.create_branch("feature/cd");
     repo.command().args(["add", "feature/cd"]).assert().success();
-    let display_name = format!("feature{}cd", std::path::MAIN_SEPARATOR);
+    let repo_name = repo.path().file_name().unwrap().to_string_lossy();
+    let display_name = format!("{}{}{}{}{}", repo_name, std::path::MAIN_SEPARATOR, "feature", std::path::MAIN_SEPARATOR, "cd");
 
     let output = repo
         .command()

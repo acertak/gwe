@@ -14,12 +14,12 @@ pub struct TestRepo {
 
 #[allow(dead_code)]
 impl TestRepo {
-    /// Create a new repository with an initial commit and `.wtp.yml`.
+    /// Create a new repository with an initial commit.
     pub fn new() -> Self {
         let temp = TempDir::new().expect("create temp dir");
         run_git(temp.path(), &["init", "-q"]);
-        run_git(temp.path(), &["config", "user.name", "wtw-test"]);
-        run_git(temp.path(), &["config", "user.email", "wtw@example.com"]);
+        run_git(temp.path(), &["config", "user.name", "gwe-test"]);
+        run_git(temp.path(), &["config", "user.email", "gwe@example.com"]);
 
         fs::write(temp.path().join("README.md"), "hello world").unwrap();
         run_git(temp.path(), &["add", "README.md"]);
@@ -27,10 +27,9 @@ impl TestRepo {
 
         let worktrees_dir = temp.path().join("worktree");
         fs::create_dir_all(&worktrees_dir).unwrap();
-        let default_config = "version: \"1.0\"\ndefaults:\n  base_dir: worktree\n";
-        fs::write(temp.path().join(".wtp.yml"), default_config).unwrap();
-        run_git(temp.path(), &["add", ".wtp.yml"]);
-        run_git(temp.path(), &["commit", "-q", "-m", "add wtp config"]);
+        
+        // Set base_dir via git config
+        run_git(temp.path(), &["config", "gwe.worktrees.dir", "worktree"]);
 
         Self {
             temp,
@@ -46,12 +45,12 @@ impl TestRepo {
         self.worktrees_dir.clone()
     }
 
-    pub fn config_path(&self) -> PathBuf {
-        self.path().join(".wtp.yml")
+    pub fn set_config(&self, key: &str, value: &str) {
+        run_git(self.path(), &["config", key, value]);
     }
 
-    pub fn write_config(&self, contents: &str) {
-        fs::write(self.config_path(), contents).unwrap();
+    pub fn add_config(&self, key: &str, value: &str) {
+        run_git(self.path(), &["config", "--add", key, value]);
     }
 
     pub fn command(&self) -> Command {

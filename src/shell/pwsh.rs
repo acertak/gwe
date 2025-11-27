@@ -42,7 +42,7 @@ function gwe {
 Register-ArgumentCompleter -Native -CommandName gwe -ScriptBlock {
     param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
 
-    $commands = @('add','list','remove','cd','shell-init')
+    $commands = @('add','list','remove','cd','shell-init','cursor','wind','anti','config')
     $elements = @($commandAst.CommandElements | ForEach-Object { $_.Extent.Text })
 
     if ($elements.Count -lt 2) {
@@ -56,7 +56,7 @@ Register-ArgumentCompleter -Native -CommandName gwe -ScriptBlock {
 
     $subcommand = $elements[1]
 
-    if ($subcommand -eq 'cd') {
+    if ($subcommand -eq 'cd' -or $subcommand -eq 'cursor' -or $subcommand -eq 'wind' -or $subcommand -eq 'anti') {
         $exe = Get-GweExePath
         $json = & $exe list --json 2>$null
         if (-not $?) {

@@ -41,12 +41,7 @@ fn rm_only_targets_current_base_dir() {
         .success();
 
     // Change base_dir so that existing worktree falls outside managed scope
-    repo.write_config(
-        r#"version: "1.0"
-defaults:
-  base_dir: alt-worktrees
-"#,
-    );
+    repo.set_config("gwe.worktrees.dir", "alt-worktrees");
 
     repo.command()
         .args(["rm", "feature/legacy"])

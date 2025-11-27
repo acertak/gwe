@@ -83,19 +83,8 @@ fn add_track_without_branch_requires_branch_name() {
 fn post_create_hooks_copy_and_command_are_run() {
     let repo = TestRepo::new();
     fs::write(repo.path().join("template.txt"), "template").unwrap();
-    repo.write_config(
-        r#"version: "1.0"
-defaults:
-  base_dir: worktree
-hooks:
-  post_create:
-    - type: copy
-      from: template.txt
-      to: copied.txt
-    - type: command
-      command: echo hook-run > hook.log
-"#,
-    );
+    repo.add_config("gwe.copy.include", "template.txt");
+    repo.add_config("gwe.hook.postcreate", "echo hook-run > hook.log");
 
     repo.command()
         .args(["add", "-b", "feature/hooks", "main"])
@@ -105,7 +94,7 @@ hooks:
         .stdout(predicate::str::contains("All hooks executed successfully"));
 
     let worktree_path = repo.worktree_path_for("feature/hooks");
-    let copied = fs::read_to_string(worktree_path.join("copied.txt")).unwrap();
+    let copied = fs::read_to_string(worktree_path.join("template.txt")).unwrap();
     assert_eq!(copied, "template");
     let hook_log = fs::read_to_string(worktree_path.join("hook.log")).unwrap();
     assert!(

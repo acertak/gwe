@@ -172,16 +172,16 @@ impl<'a> HookExecutor<'a> {
             .unwrap_or_else(|| worktree_path.to_path_buf());
         command.current_dir(&working_dir);
 
-        command.env_remove("WTP_SHELL_INTEGRATION");
+        command.env_remove("GWE_SHELL_INTEGRATION");
         for (key, value) in &hook.env {
             command.env(key, value);
         }
         command.env(
-            "GIT_WTP_WORKTREE_PATH",
+            "GIT_GWE_WORKTREE_PATH",
             worktree_path.to_string_lossy().to_string(),
         );
         command.env(
-            "GIT_WTP_REPO_ROOT",
+            "GIT_GWE_REPO_ROOT",
             self.repo_root.to_string_lossy().to_string(),
         );
 
