@@ -162,25 +162,34 @@ gwe shell-init zsh > gwe.zsh
 基本的な使い方
 --------------
 
-### worktree の作成 (`add`)
+### ツール起動・Worktree 作成
+
+エディタや AI ツールを指定して worktree を開きます。
+指定された worktree が存在しない場合は、新規作成されます。
 
 ```powershell
-# 既存のローカルまたはリモートブランチから worktree を作成
-gwe add feature/auth
+# 既存のローカルまたはリモートブランチから worktree を作成・開く
+gwe cursor feature/auth
 
-# 新しいブランチを作成して worktree を追加
-gwe add -b feature/new-feature
+# 新しいブランチを作成して worktree を追加・開く
+gwe cursor -b feature/new-feature
 
 # 特定のリモートブランチを追跡する新しいブランチを作成
-gwe add --track origin/feature/remote-only
+gwe claude --track origin/feature/remote-only -b feature/local
 
-# 特定のコミットをベースに使用 (ブランチ名は -b で指定)
-gwe add -b hotfix/urgent abc1234
+# 特定のコミットをベースに使用
+gwe wind -b hotfix/urgent abc1234
 ```
 
-- デフォルトでは、worktree はリポジトリルートからの相対パス `../worktree` 配下に配置されます。
-- `/` を含むブランチ名はネストされたディレクトリになります (例: `feature/auth` → `../worktree/feature/auth`)。
+**利用可能なツールコマンド:**
 
+- **エディタ**: `gwe cursor`, `gwe wind` (Windsurf), `gwe anti` (Antigravity)
+- **AI CLI**: `gwe claude`, `gwe codex`, `gwe gemini` (新しいターミナルで起動)
+- **汎用**:
+  - `gwe -e` (`gwe config set gwe.defaultEditor ...` で設定されたエディタ)
+  - `gwe -c` (`gwe config set gwe.defaultCli ...` で設定された CLI)
+
+デフォルトでは、worktree はリポジトリルートからの相対パス `../worktree` 配下に配置されます。
 
 ### worktree の一覧表示 (`list`)
 

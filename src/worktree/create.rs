@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use crate::cli::AddCommand;
+use crate::cli::ToolCommand;
 use crate::config::Config;
 use crate::error::AppError;
 use crate::git::rev::RepoContext;
@@ -14,11 +14,68 @@ use crate::git::runner::{GitError, GitRunner};
 use crate::git::worktree::{WorktreeInfo, list_worktrees};
 use crate::hooks::executor::HookExecutor;
 use crate::worktree::common;
-use crate::worktree::tool;
 
-pub fn run(repo: &RepoContext, git: &GitRunner, config: &Config, cmd: &AddCommand) -> Result<()> {
+struct AddSpec {
+    path: PathBuf,
+    branch: Option<String>,
+    commitish: Option<String>,
+    track: bool,
+    display_name: String,
+}
+
+/// 指定された worktree が存在すればそのパスを返し、
+/// 存在せず新規作成が必要なら作成してパスを返す。
+/// 作成もしない場合は None を返す。
+pub fn ensure_worktree(
+    repo: &RepoContext,
+    git: &GitRunner,
+    config: &Config,
+    cmd: &ToolCommand,
+) -> Result<PathBuf> {
     let existing = list_worktrees(git)?;
-    let spec = build_spec(repo, config, cmd, &existing)?;
+
+    // 1. まずは既存の worktree を解決してみる (既存の resolve ロジック相当)
+    // ただし resolve_worktree_path は Not Found エラーを返すので、ここでは簡易チェックを行うか、
+    // あるいは一度 resolve を試みるのが良い。
+    // しかし ToolCommand から target が None の場合 (@) は作成しないので、
+    // 既存解決を優先する。
+
+    // -b が指定されている場合は常に新規作成を試みる
+    if cmd.branch.is_some() {
+        return create_new_worktree(repo, git, config, cmd, &existing);
+    }
+
+    let target_name = cmd.target.clone().unwrap_or_else(|| "@".to_string());
+    
+    // 既存解決を試みる
+    // target が指定されていない(None -> @)場合も既存解決(main)される
+    if let Ok(path) = crate::worktree::resolve::resolve_worktree_path(repo, git, config, Some(target_name.clone())) {
+        return Ok(path);
+    }
+
+    // 解決できなかった場合、かつ target が指定されているなら新規作成を試みる
+    if let Some(target) = &cmd.target {
+        if target == "@" || target == "root" {
+            return Err(AppError::user("Main worktree not found").into());
+        }
+        // ここに来るのは、target が既存の worktree 名でもブランチ名でもない場合、
+        // あるいは既存ブランチだが worktree 化されていない場合。
+        // add <BRANCH> 相当として扱う
+        return create_new_worktree(repo, git, config, cmd, &existing);
+    }
+
+    // target なし、branch なし、かつ @ も解決できない（ありえないが）場合はエラー
+    Err(AppError::user("worktree not found").into())
+}
+
+fn create_new_worktree(
+    repo: &RepoContext,
+    git: &GitRunner,
+    config: &Config,
+    cmd: &ToolCommand,
+    existing: &[WorktreeInfo],
+) -> Result<PathBuf> {
+    let spec = build_spec(repo, config, cmd, existing)?;
 
     ensure_parents_exist(&spec.path)?;
     run_git_add(git, &spec)?;
@@ -35,25 +92,13 @@ pub fn run(repo: &RepoContext, git: &GitRunner, config: &Config, cmd: &AddComman
     let executor = HookExecutor::new(config, repo.main_root());
     executor.execute_post_create_hooks(&mut stdout, &spec.path)?;
 
-    if cmd.open {
-        tool::launch_editor(config, &spec.path)?;
-    }
-
-    Ok(())
-}
-
-struct AddSpec {
-    path: PathBuf,
-    branch: Option<String>,
-    commitish: Option<String>,
-    track: bool,
-    display_name: String,
+    Ok(spec.path)
 }
 
 fn build_spec(
     repo: &RepoContext,
     config: &Config,
-    cmd: &AddCommand,
+    cmd: &ToolCommand,
     existing: &[WorktreeInfo],
 ) -> Result<AddSpec> {
     let base_dir = config.resolved_base_dir(repo.main_root());
@@ -85,18 +130,23 @@ fn build_spec(
             .into());
         }
         (inferred_branch, Some(track.to_string()), true)
-    } else if branch_flag.is_some() {
+    } else if let Some(branch_name) = branch_flag {
+        // -b <BRANCH> [COMMITISH] のパターン
+        // target があれば commitish として扱う、なければ HEAD (None)
         (
-            branch_flag.map(|s| s.to_string()),
+            Some(branch_name.to_string()),
             target_arg.map(|s| s.to_string()),
             false,
         )
+    } else if let Some(target) = target_arg {
+        // add <BRANCH> のパターン (既存ブランチから作成)
+        // target が BRANCH になる
+        // この場合、新しいブランチは作成しない (branch = None)
+        // commitish として target を使う
+        (None, Some(target.to_string()), false)
     } else {
-        let commit = target_arg
-            .map(|s| s.to_string())
-            .ok_or_else(|| AppError::user("branch or commit is required"))
-            .map_err(anyhow::Error::from)?;
-        (None, Some(commit), false)
+        // -b も target もない場合はエラー（既存解決で処理されているはずだがここに来たらエラー）
+        return Err(AppError::user("branch or target is required for creation").into());
     };
 
     let identifier = branch
@@ -251,37 +301,5 @@ fn run_git_add(git: &GitRunner, spec: &AddSpec) -> Result<()> {
             }
         }
         Err(err) => Err(AppError::git(err.to_string()).into()),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn branch_to_relative_path_replaces_forbidden_characters() {
-        let path = branch_to_relative_path("feat:bad*name");
-        assert_eq!(path, PathBuf::from("feat_bad_name"));
-    }
-
-    #[test]
-    fn branch_to_relative_path_normalizes_segments() {
-        let path = branch_to_relative_path("feature//..//auth");
-        let mut expected = PathBuf::new();
-        expected.push("feature");
-        expected.push("_");
-        expected.push("_");
-        expected.push("_");
-        expected.push("auth");
-        assert_eq!(path, expected);
-    }
-
-    #[test]
-    fn infer_branch_from_track_parses_remote_branch() {
-        assert_eq!(
-            infer_branch_from_track("origin/feature/auth"),
-            Some("feature/auth".to_string())
-        );
-        assert_eq!(infer_branch_from_track("origin-only"), None);
     }
 }

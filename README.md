@@ -163,24 +163,34 @@ gwe shell-init zsh > gwe.zsh
 Basic Usage
 -----------
 
-### Create a worktree (`add`)
+### Launch Tools & Create Worktrees
+
+Open a worktree with your favorite editor or AI tool.
+If the specified worktree does not exist, it will be created automatically.
 
 ```powershell
-# Create a worktree from an existing local or remote branch
-gwe add feature/auth
+# Create/Open worktree from an existing branch
+gwe cursor feature/auth
 
 # Create a new branch and worktree
-gwe add -b feature/new-feature
+gwe cursor -b feature/new-feature
 
-# Create a new branch tracking a specific remote branch
-gwe add --track origin/feature/remote-only
+# Create a new branch tracking a remote branch
+gwe claude --track origin/feature/remote -b feature/local
 
-# Use a specific commit as the base (branch name via -b)
-gwe add -b hotfix/urgent abc1234
+# Use a specific commit as base
+gwe wind -b hotfix/urgent abc1234
 ```
 
-- By default, worktrees are placed under `../worktree` relative to the repo root.
-- Branch names with `/` become nested directories (e.g. `feature/auth` → `../worktree/feature/auth`).
+**Available Commands:**
+
+- **Editors**: `gwe cursor`, `gwe wind` (Windsurf), `gwe anti` (Antigravity)
+- **AI CLI**: `gwe claude`, `gwe codex`, `gwe gemini` (opens in new terminal)
+- **Generic**:
+  - `gwe -e` (Uses `gwe.defaultEditor`)
+  - `gwe -c` (Uses `gwe.defaultCli`)
+
+By default, worktrees are placed under `../worktree` relative to the repo root.
 
 
 ### List worktrees (`list`)

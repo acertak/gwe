@@ -30,8 +30,6 @@ pub struct GlobalOptions {
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum Command {
-    /// worktree を追加
-    Add(AddCommand),
     /// 登録済み worktree を一覧表示
     List(ListCommand),
     /// worktree を削除
@@ -51,15 +49,36 @@ pub enum Command {
     Wind(ToolCommand),
     /// Antigravity を起動
     Anti(ToolCommand),
+    /// Claude を新しいターミナルで起動
+    Claude(ToolCommand),
+    /// Codex を新しいターミナルで起動
+    Codex(ToolCommand),
+    /// Gemini を新しいターミナルで起動
+    Gemini(ToolCommand),
+    /// デフォルトエディタを起動 (-e)
+    #[command(short_flag = 'e')]
+    Edit(ToolCommand),
+    /// デフォルトCLIを起動 (-c)
+    #[command(short_flag = 'c')]
+    RunCli(ToolCommand),
 }
 
 #[derive(Args, Debug, Clone)]
 pub struct ToolCommand {
-    /// 対象 worktree
+    /// 対象 worktree (または新規作成時のターゲット)
     #[arg(value_name = "WORKTREE")]
     pub target: Option<String>,
+    
+    /// 新規ブランチ名 (指定された場合、新規 worktree を作成して開く)
+    #[arg(short = 'b', long = "branch", value_name = "BRANCH")]
+    pub branch: Option<String>,
+
+    /// 追跡する remote/branch (新規作成時用)
+    #[arg(long = "track", value_name = "REMOTE/BRANCH")]
+    pub track: Option<String>,
+
     /// ツールに渡す引数
-    #[arg(last = true)]
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub args: Vec<String>,
 }
 
@@ -95,22 +114,6 @@ pub enum ConfigAction {
         #[arg(long)]
         global: bool,
     },
-}
-
-#[derive(Args, Debug, Clone)]
-pub struct AddCommand {
-    /// ブランチまたはコミット
-    #[arg(value_name = "BRANCH_OR_COMMIT")]
-    pub target: Option<String>,
-    /// 新規ブランチ名
-    #[arg(short = 'b', long = "branch", value_name = "BRANCH")]
-    pub branch: Option<String>,
-    /// 追跡する remote/branch
-    #[arg(long = "track", value_name = "REMOTE/BRANCH")]
-    pub track: Option<String>,
-    /// 作成後にエディタで開く
-    #[arg(short = 'o', long = "open")]
-    pub open: bool,
 }
 
 #[derive(Args, Debug, Clone, Copy)]

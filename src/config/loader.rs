@@ -44,6 +44,9 @@ fn load_from_git_config(repo: &RepoContext, config: &mut Config) -> Result<()> {
             "gwe.defaultbranch" => {
                 config.default_branch = Some(value.to_string());
             }
+            "gwe.defaulteditor" => {
+                config.default_editor = Some(value.to_string());
+            }
             "gwe.copy.include" => {
                 config.hooks.post_create.push(Hook::GlobCopy(GlobCopyHook {
                     pattern: value.to_string(),

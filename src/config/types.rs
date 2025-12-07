@@ -16,6 +16,10 @@ pub struct Config {
     pub hooks: Hooks,
     #[serde(default)]
     pub default_branch: Option<String>,
+    #[serde(default)]
+    pub default_editor: Option<String>,
+    #[serde(default)]
+    pub default_cli: Option<String>,
 }
 
 impl Default for Config {
@@ -25,6 +29,8 @@ impl Default for Config {
             defaults: Defaults::default(),
             hooks: Hooks::default(),
             default_branch: None,
+            default_editor: None,
+            default_cli: None,
         }
     }
 }

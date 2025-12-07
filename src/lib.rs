@@ -19,11 +19,28 @@ pub fn run() -> Result<ExitCode> {
     logging::init(&globals)?;
 
     match cli.command {
-        cli::Command::Add(cmd) => {
+        cli::Command::List(cmd) => {
             let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
             let config = config::load_config(&repo)?;
             let git = git::GitRunner::new(repo.clone());
-            worktree::add::run(&repo, &git, &config, &cmd)?;
+            worktree::list::run(
+                &repo,
+                &git,
+                &config,
+                worktree::list::ListOptions { json: cmd.json },
+            )?;
+        }
+        cli::Command::Rm(cmd) => {
+            let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
+            let config = config::load_config(&repo)?;
+            let git = git::GitRunner::new(repo.clone());
+            worktree::rm::run(&repo, &git, &config, &cmd)?;
+        }
+        cli::Command::Cd(cmd) => {
+            let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
+            let config = config::load_config(&repo)?;
+            let git = git::GitRunner::new(repo.clone());
+            worktree::resolve::run(&repo, &git, &config, cmd.target)?;
         }
         cli::Command::Config(cmd) => {
             let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
@@ -47,28 +64,35 @@ pub fn run() -> Result<ExitCode> {
             let git = git::GitRunner::new(repo.clone());
             worktree::tool::run_tool_command(&repo, &git, &config, &cmd, "antigravity")?;
         }
-        cli::Command::List(cmd) => {
+        cli::Command::Claude(cmd) => {
             let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
             let config = config::load_config(&repo)?;
             let git = git::GitRunner::new(repo.clone());
-            worktree::list::run(
-                &repo,
-                &git,
-                &config,
-                worktree::list::ListOptions { json: cmd.json },
-            )?;
+            worktree::tool::run_terminal_tool_command(&repo, &git, &config, &cmd, "claude")?;
         }
-        cli::Command::Rm(cmd) => {
+        cli::Command::Codex(cmd) => {
             let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
             let config = config::load_config(&repo)?;
             let git = git::GitRunner::new(repo.clone());
-            worktree::rm::run(&repo, &git, &config, &cmd)?;
+            worktree::tool::run_terminal_tool_command(&repo, &git, &config, &cmd, "codex")?;
         }
-        cli::Command::Cd(cmd) => {
+        cli::Command::Gemini(cmd) => {
             let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
             let config = config::load_config(&repo)?;
             let git = git::GitRunner::new(repo.clone());
-            worktree::resolve::run(&repo, &git, &config, cmd.target)?;
+            worktree::tool::run_terminal_tool_command(&repo, &git, &config, &cmd, "gemini")?;
+        }
+        cli::Command::Edit(cmd) => {
+            let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
+            let config = config::load_config(&repo)?;
+            let git = git::GitRunner::new(repo.clone());
+            worktree::tool::run_default_editor(&repo, &git, &config, &cmd)?;
+        }
+        cli::Command::RunCli(cmd) => {
+            let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
+            let config = config::load_config(&repo)?;
+            let git = git::GitRunner::new(repo.clone());
+            worktree::tool::run_default_cli(&repo, &git, &config, &cmd)?;
         }
         cli::Command::Init(cmd) => match cmd.shell {
             cli::ShellKind::Pwsh => {
