@@ -53,12 +53,17 @@ gwe cursor --track origin/feature/remote -b feature/local
 
 # コミットをベースに新規ブランチを作成して開く
 gwe cursor abc1234 -b hotfix/fix-bug
+
+# 複数の worktree を作成し、分割ペインで起動
+gwe claude -x 3 -b feature/parallel
+# → feature/parallel-1, feature/parallel-2, feature/parallel-3 を作成
 ```
 
 | オプション | 説明 |
 |-----------|------|
 | `-b, --branch <BRANCH>` | 新規ブランチ名 (指定時は常に新規作成) |
 | `--track <REMOTE/BRANCH>` | 追跡する remote/branch |
+| `-x, --multiplier <COUNT>` | 並列 worktree 作成 (1-5、分割ペインで起動) |
 | `-- <ARGS>...` | ツールに渡す引数 |
 
 ---

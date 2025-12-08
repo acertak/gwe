@@ -180,6 +180,10 @@ gwe claude --track origin/feature/remote -b feature/local
 
 # Use a specific commit as base
 gwe wind -b hotfix/urgent abc1234
+
+# Create multiple worktrees and launch in split panes
+gwe claude -x 3 -b feature/parallel
+# Creates feature/parallel-1, feature/parallel-2, feature/parallel-3
 ```
 
 **Available Commands:**

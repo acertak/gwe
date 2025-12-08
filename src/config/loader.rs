@@ -1,9 +1,7 @@
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::Result;
 
-use crate::error::AppError;
 use crate::git::rev::RepoContext;
 use crate::git::runner::GitRunner;
 
@@ -71,6 +69,7 @@ fn load_from_git_config(repo: &RepoContext, config: &mut Config) -> Result<()> {
 mod tests {
     use super::*;
     use crate::config::types;
+    use std::fs;
     use std::path::{Path, PathBuf};
     use std::process::Command;
     use tempfile::TempDir;

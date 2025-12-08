@@ -77,6 +77,10 @@ pub struct ToolCommand {
     #[arg(long = "track", value_name = "REMOTE/BRANCH")]
     pub track: Option<String>,
 
+    /// 並列 worktree 作成数 (1-5、分割ペインで起動)
+    #[arg(short = 'x', long = "multiplier", value_name = "COUNT", value_parser = clap::value_parser!(u8).range(1..=5))]
+    pub multiplier: Option<u8>,
+
     /// ツールに渡す引数
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub args: Vec<String>,

@@ -270,6 +270,58 @@ fn ensure_parents_exist(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// ブランチ名にインデックスを付与した名前を生成
+fn generate_branch_name(base: &str, index: u8) -> String {
+    format!("{}-{}", base, index)
+}
+
+/// 複数の worktree を作成し、パスのリストを返す
+pub fn create_multiple_worktrees(
+    repo: &RepoContext,
+    git: &GitRunner,
+    config: &Config,
+    base_branch: &str,
+    count: u8,
+    track: Option<&str>,
+) -> Result<Vec<PathBuf>> {
+    let existing = list_worktrees(git)?;
+    let mut paths = Vec::with_capacity(count as usize);
+
+    for i in 1..=count {
+        let branch_name = generate_branch_name(base_branch, i);
+
+        let cmd = crate::cli::ToolCommand {
+            target: None,
+            branch: Some(branch_name.clone()),
+            track: track.map(|s| s.to_string()),
+            multiplier: None,
+            args: vec![],
+        };
+
+        let spec = build_spec(repo, config, &cmd, &existing)?;
+        ensure_parents_exist(&spec.path)?;
+        run_git_add(git, &spec)?;
+
+        let mut stdout = io::stdout().lock();
+        let display_path = common::normalize_path(&spec.path);
+        writeln!(
+            stdout,
+            "[{}/{}] Created worktree '{}' at {}",
+            i,
+            count,
+            spec.display_name,
+            display_path.display()
+        )?;
+
+        let executor = HookExecutor::new(config, repo.main_root());
+        executor.execute_post_create_hooks(&mut stdout, &spec.path)?;
+
+        paths.push(spec.path);
+    }
+
+    Ok(paths)
+}
+
 fn run_git_add(git: &GitRunner, spec: &AddSpec) -> Result<()> {
     let mut args: Vec<OsString> = Vec::new();
     args.push("worktree".into());

@@ -179,6 +179,10 @@ gwe claude --track origin/feature/remote-only -b feature/local
 
 # 特定のコミットをベースに使用
 gwe wind -b hotfix/urgent abc1234
+
+# 複数の worktree を作成し、分割ペインで起動
+gwe claude -x 3 -b feature/parallel
+# → feature/parallel-1, feature/parallel-2, feature/parallel-3 を作成
 ```
 
 **利用可能なツールコマンド:**
