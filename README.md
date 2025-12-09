@@ -1,219 +1,271 @@
 gwe (Git Worktree Extension)
 ==============================
 
-Windows‑native worktree helper written in Rust. "gwe" stands for **Git Worktree Extension**.
+Rust 製の Git worktree ヘルパーツールです。"gwe" は **Git Worktree Extension** の略です。
 
-Git worktree を Windows で快適に扱うための CLI ツールです。Windows 11 / PowerShell 前提で使いやすくすることを目指しています。  
-日本語の README は `README.ja.md` を参照してください。
+Git worktree を快適に扱うための CLI ツールです。Windows と macOS に対応しています。  
+For the English version of the README, see `README.en.md`.
 
-> Status: 0.3.x. The CLI is ready for daily use.
+> Status: 1.0.0. 日常的な利用に十分な機能が揃っています。
 
-> **Notice:**
-> Until v0.2.0, this tool was based on `wtp` (Git Worktree Pro). Since v0.3.0, it has been rewritten as an original implementation, and the command name has been changed from `wtw` to `gwe`.
+> **注意:**
+> v0.2.0 までは `wtp` (Git Worktree Pro) をベースにしていましたが、v0.3.0 からは `wtp` ベースを廃止し、完全なオリジナル実装となりました。これに伴い、コマンド名も `wtw` から `gwe` に変更されました。
 
 
-Features
+特徴
+----
+
+- **Windows / macOS 対応の worktree ヘルパー**
+  - 内部で `git` コマンドを使用します。
+  - Windows スタイルのパスやドライブレター、Unix スタイルのパスをサポートします。
+- **自動的な worktree レイアウト**
+  - デフォルトで `feature/auth` のようなブランチ名を `../worktree/feature/auth` にマッピングします。
+  - Windows で禁止されている文字をブランチ名に含む場合、安全な文字に置換します（例: `feat:bad*name` → `feat_bad_name`）。
+- **作成後のフック機能**
+  - `copy` フック: `.env` などの gitignore されたファイルをメイン worktree からコピーします。
+  - `command` フック: 依存関係のインストールやマイグレーションなどのセットアップコマンドを実行します。
+- **リッチな `list` 出力と JSON サポート**
+  - `PATH`, `BRANCH`, `HEAD`, `STATUS`, `UPSTREAM`, `ABS_PATH` を含む見やすいテーブル表示。
+  - ツール連携や PowerShell 補完のための `gwe list --json`。
+- **シェル統合 (PowerShell, Bash, Zsh)**
+  - `gwe init` でシェルプロファイルに関数を追加し、`gwe cd` で実際にカレントディレクトリを変更できるようにします。
+  - サブコマンドや `gwe cd` の worktree 名に対するタブ補完。
+
+
+動作要件
 --------
 
-- **Windows‑first worktree helper**
-  - Uses `git.exe` under the hood.
-  - Supports Windows‑style paths and drive letters.
-- **Automatic worktree layout**
-  - Branch names like `feature/auth` are mapped to `../worktree/feature/auth` by default.
-  - Windows‑forbidden characters in branch names are sanitized (e.g. `feat:bad*name` → `feat_bad_name`).
-- **Post‑create hooks**
-  - `copy` hooks to copy files (even gitignored ones like `.env`) from the main worktree.
-  - `command` hooks to run bootstrap commands (install deps, run migrations, etc.).
-- **Rich `list` output with JSON**
-  - Human‑friendly table with `PATH`, `BRANCH`, `HEAD`, `STATUS`, `UPSTREAM`, `ABS_PATH`.
-  - `gwe list --json` for tooling and PowerShell completion.
-- **Shell integration (PowerShell, Bash, Zsh)**
-  - `gwe init` appends a small function to your shell profile so that `gwe cd` actually changes the current directory.
-  - Tab completion for subcommands and `gwe cd` worktree names.
-
-
-Requirements
-------------
-
-- **OS**: Windows 11 (other modern Windows versions may work, but are not officially tested).
-- **Git**: Git for Windows (with `git.exe` on `PATH`).
-- **Shell**:
-  - PowerShell 7+ (recommended).
-  - Git Bash (Bash) / Zsh.
-  - Cmd is not supported yet.
-- **Rust toolchain** (only if you build from source):
+- **OS**:
+  - Windows 11 (他のモダンな Windows バージョンでも動作する可能性があります)
+  - macOS (Terminal.app / iTerm2 対応)
+- **Git**: `git` コマンドが `PATH` に通っていること。
+- **シェル**:
+  - PowerShell 7+ (Windows、推奨)
+  - Bash / Zsh (macOS / Linux)
+  - Cmd は未サポート
+- **Rust ツールチェーン** (ソースからビルドする場合のみ):
   - Rust stable
   - `cargo`
 
 
-Installation
+インストール
 ------------
 
-### Download prebuilt binary (recommended for most users)
+### プレビルドバイナリのダウンロード (推奨)
 
-Once you publish a release, the typical distribution looks like:
+リリースが公開されると、一般的な配布物は以下のようになります:
 
-- `gwe-<version>-x86_64-pc-windows-msvc.zip`
+- `gwe-<version>-x86_64-pc-windows-msvc.zip` (Windows)
+- `gwe-<version>-x86_64-apple-darwin.tar.gz` (macOS Intel)
+- `gwe-<version>-aarch64-apple-darwin.tar.gz` (macOS Apple Silicon)
 
-Each archive should contain:
+各アーカイブには以下が含まれます:
 
-- `gwe.exe`
-- `README.md` (this file)
+- `gwe.exe` (Windows) / `gwe` (macOS)
+- `README.md` (このファイル)
 - `LICENSE`
 
-Install steps:
+#### Windows の場合
 
 ```powershell
-# 1. Download the ZIP from this repository's “Releases” page
-# 2. Extract it somewhere, for example:
-Expand-Archive -Path .\gwe-0.3.0-x86_64-pc-windows-msvc.zip -DestinationPath C:\tools\gwe
+# 1. リポジトリの "Releases" ページから ZIP をダウンロード
+# 2. 任意の場所に解凍 (例: C:\tools\gwe)
+Expand-Archive -Path .\gwe-1.0.0-x86_64-pc-windows-msvc.zip -DestinationPath C:\tools\gwe
 
-# 3. Add that directory to your PATH (once)
-[System.Environment]::SetEnvironmentVariable(
-  "Path",
-  $env:Path + ";C:\tools\gwe",
-  "User"
-)
+# 3. そのディレクトリを PATH に追加 (一度だけ)
+[System.Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\tools\gwe", "User")
 
-# 4. Open a new PowerShell and verify
+# 4. 新しい PowerShell を開いて確認
 gwe --help
 ```
 
-> NOTE: The exact archive name and destination path are just examples. Adjust them according to your release/tag naming.
+#### macOS の場合
+
+```bash
+# 1. リポジトリの "Releases" ページから tar.gz をダウンロード
+# 2. 任意の場所に解凍 (例: ~/tools/gwe)
+mkdir -p ~/tools/gwe
+tar -xzf gwe-1.0.0-aarch64-apple-darwin.tar.gz -C ~/tools/gwe
+
+# 3. そのディレクトリを PATH に追加 (~/.zshrc または ~/.bashrc に追記)
+echo 'export PATH="$HOME/tools/gwe:$PATH"' >> ~/.zshrc
+
+# 4. 新しいターミナルを開いて確認
+gwe --help
+```
+
+> NOTE: アーカイブ名や解凍先パスは一例です。実際のリリース/タグ名に合わせて調整してください。
 
 
-### Build and install from source
+### ソースからビルドしてインストール
 
-Clone this repository and build inside the `gwe` crate:
+このリポジトリをクローンし、`gwe` クレート内でビルドします:
+
+#### Windows の場合
 
 ```powershell
 git clone <this repository>
 cd gwe
 
-# Build a release binary
+# リリースビルド
 cargo build --release
 
-# Option 1: use the built binary directly
+# オプション 1: ビルドされたバイナリを直接使用
 .\target\release\gwe.exe --help
 
-# Option 2: install to ~/.cargo/bin
+# オプション 2: ~/.cargo/bin にインストール
+cargo install --path .
+gwe --help
+```
+
+#### macOS の場合
+
+```bash
+git clone <this repository>
+cd gwe
+
+# リリースビルド
+cargo build --release
+
+# オプション 1: ビルドされたバイナリを直接使用
+./target/release/gwe --help
+
+# オプション 2: ~/.cargo/bin にインストール
 cargo install --path .
 gwe --help
 ```
 
 
-Quick Start
------------
+クイックスタート
+----------------
 
-### 1. Prepare a Git repository
+### 1. Git リポジトリの準備
 
-Inside a Git repository (or with `--repo` pointing to one), `gwe` auto‑detects the repo root:
+Git リポジトリ内で (または `--repo` で指定して)、`gwe` はリポジトリルートを自動検出します:
+
+#### Windows の場合
 
 ```powershell
-# In your existing Git repo
+# 既存の Git リポジトリ内で
 cd C:\src\my-project
 gwe list --json
 
-# Or from outside the repo
+# またはリポジトリ外から
 gwe --repo C:\src\my-project list --json
 ```
 
+#### macOS の場合
 
-### 2. Enable Shell integration (optional but recommended)
+```bash
+# 既存の Git リポジトリ内で
+cd ~/src/my-project
+gwe list --json
 
-If `gwe.exe` is on `PATH`, you can add the `gwe` function and completion to your shell profile with a single command:
+# またはリポジトリ外から
+gwe --repo ~/src/my-project list --json
+```
+
+
+### 2. シェル統合の有効化 (任意ですが推奨)
+
+`gwe` が `PATH` にあれば、1つのコマンドで `gwe` 関数と補完をシェルプロファイルに追加できます:
+
+#### Windows (PowerShell) の場合
 
 ```powershell
-# Use the default profile for your current shell (auto-detected)
-# Supported: pwsh, bash, zsh
-gwe init
-
-# Or specify the shell explicitly
+# PowerShell プロファイルに追加
 gwe init --shell pwsh
-gwe init --shell bash
-gwe init --shell zsh
-```
 
-What this does:
-
-- Creates the profile directory/file if needed.
-- Appends a section starting with `# gwe shell integration`.
-- Defines a `gwe` function that:
-  - Calls the real `gwe.exe`.
-  - If the first argument is `cd` and the command succeeds, changes the current directory to the printed path.
-- Registers shell completion (ArgumentCompleter in PowerShell, complete function in Bash/Zsh).
-
-After running `gwe init`, open a **new** shell session and try:
-
-```powershell
+# 新しい PowerShell を開いて確認
 gwe cd @
-gwe cd <TAB>  # completes worktree names
+gwe cd <TAB>  # worktree 名が補完されます
 ```
 
-If you prefer to manage your profile manually, you can also emit the script and inspect it:
+#### macOS (Zsh / Bash) の場合
 
-```powershell
-gwe shell-init pwsh > gwe.ps1
-# or
-gwe shell-init bash > gwe.sh
-gwe shell-init zsh > gwe.zsh
+```bash
+# Zsh の場合 (~/.zshrc に追加)
+gwe init --shell zsh
+
+# Bash の場合 (~/.bashrc に追加)
+gwe init --shell bash
+
+# 新しいターミナルを開いて確認
+gwe cd @
+gwe cd <TAB>  # worktree 名が補完されます
+```
+
+これが行うこと:
+
+- 必要に応じてプロファイルディレクトリ/ファイルを作成します。
+- `# gwe shell integration` で始まるセクションを追記します。
+- 以下の機能を持つ `gwe` 関数を定義します:
+  - 実際の `gwe` バイナリを呼び出す。
+  - 最初の引数が `cd` でコマンドが成功した場合、カレントディレクトリを表示されたパスに変更する。
+- シェル補完を登録します (PowerShell の ArgumentCompleter, Bash/Zsh の complete 関数)。
+
+手動でプロファイルを管理したい場合は、スクリプトを出力して確認できます:
+
+```bash
+gwe shell-init pwsh > gwe.ps1   # PowerShell
+gwe shell-init bash > gwe.sh    # Bash
+gwe shell-init zsh > gwe.zsh    # Zsh
 ```
 
 
-Basic Usage
------------
+基本的な使い方
+--------------
 
-### Launch Tools & Create Worktrees
+### ツール起動・Worktree 作成
 
-Open a worktree with your favorite editor or AI tool.
-If the specified worktree does not exist, it will be created automatically.
+エディタや AI ツールを指定して worktree を開きます。
+指定された worktree が存在しない場合は、新規作成されます。
 
 ```powershell
-# Create/Open worktree from an existing branch
+# 既存のローカルまたはリモートブランチから worktree を作成・開く
 gwe cursor feature/auth
 
-# Create a new branch and worktree
+# 新しいブランチを作成して worktree を追加・開く
 gwe cursor -b feature/new-feature
 
-# Create a new branch tracking a remote branch
-gwe claude --track origin/feature/remote -b feature/local
+# 特定のリモートブランチを追跡する新しいブランチを作成
+gwe claude --track origin/feature/remote-only -b feature/local
 
-# Use a specific commit as base
+# 特定のコミットをベースに使用
 gwe wind -b hotfix/urgent abc1234
 
-# Create multiple worktrees and launch in split panes
+# 複数の worktree を作成し、分割ペインで起動
 gwe claude -x 3 -b feature/parallel
-# Creates feature/parallel-1, feature/parallel-2, feature/parallel-3
+# → feature/parallel-1, feature/parallel-2, feature/parallel-3 を作成
 ```
 
-**Available Commands:**
+**利用可能なツールコマンド:**
 
-- **Editors**: `gwe cursor`, `gwe wind` (Windsurf), `gwe anti` (Antigravity)
-- **AI CLI**: `gwe claude`, `gwe codex`, `gwe gemini` (opens in new terminal)
-- **Generic**:
-  - `gwe -e` (Uses `gwe.defaultEditor`)
-  - `gwe -c` (Uses `gwe.defaultCli`)
+- **エディタ**: `gwe cursor`, `gwe wind` (Windsurf), `gwe anti` (Antigravity)
+- **AI CLI**: `gwe claude`, `gwe codex`, `gwe gemini` (新しいターミナルで起動)
+- **汎用**:
+  - `gwe -e` (`gwe config set gwe.defaultEditor ...` で設定されたエディタ)
+  - `gwe -c` (`gwe config set gwe.defaultCli ...` で設定された CLI)
 
-By default, worktrees are placed under `../worktree` relative to the repo root.
+デフォルトでは、worktree はリポジトリルートからの相対パス `../worktree` 配下に配置されます。
 
-
-### List worktrees (`list`)
+### worktree の一覧表示 (`list`)
 
 ```powershell
-# Human-friendly table
+# 見やすいテーブル形式
 gwe list
 
-# Example output:
+# 出力例:
 # PATH                      BRANCH           HEAD     STATUS  UPSTREAM       ABS_PATH
 # ----                      ------           ----     ------  --------       --------
 # @*                        main             c72c7800 clean   origin/main    C:\src\my-project
 # feature/auth              feature/auth     def45678 dirty   origin/feature/auth C:\src\my-project\..\worktree\feature\auth
 
-# JSON for tooling or completion
+# ツールや補完用の JSON 出力
 gwe list --json
 ```
 
-The JSON output roughly looks like this:
+JSON 出力は概ね以下のようになります:
 
 ```json
 [
@@ -232,99 +284,219 @@ The JSON output roughly looks like this:
 ```
 
 
-### Remove a worktree (`remove`)
+### worktree の削除 (`remove`)
 
 ```powershell
-# Remove a worktree (by display name/branch/directory)
+# worktree を削除 (表示名/ブランチ名/ディレクトリ名で指定)
 gwe remove feature/auth
 
-# Force removal even if the worktree is dirty
+# worktree が dirty でも強制削除
 gwe remove --force feature/auth
 
-# Remove worktree and its branch (only if merged)
+# worktree とそのブランチを削除 (マージ済みの場合のみ)
 gwe remove --with-branch feature/auth
 
-# Remove worktree and force-delete the branch
+# worktree を削除し、ブランチも強制削除
 gwe remove --with-branch --force-branch feature/auth
 ```
 
-Only worktrees managed under `base_dir` are removed; others are left untouched.
-You cannot remove the **current** worktree (an error is returned instead).
+`base_dir` 管理下の worktree のみが削除対象です。それ以外は変更されません。
+**現在の** worktree は削除できません (エラーが返されます)。
 
 
-### Navigate between worktrees (`cd`)
+### worktree 間の移動 (`cd`)
 
-With PowerShell integration enabled (`gwe init`), you can jump between worktrees:
+シェル統合が有効 (`gwe init`) であれば、worktree 間を移動できます:
 
 ```powershell
-# Change to a worktree by its name or branch
+# 名前またはブランチ名で worktree に移動
 gwe cd feature/auth
 
-# Change back to the main worktree
+# メイン worktree に戻る
 gwe cd @
-gwe cd my-project   # repo name also works
+gwe cd my-project   # リポジトリ名でも可
 ```
 
-If `gwe` cannot find the requested worktree, it prints a helpful error with a list of available names and suggests running `gwe list`.
+`gwe` が指定された worktree を見つけられない場合、利用可能な名前のリストと共にヘルプを表示し、`gwe list` の実行を提案します。
 
 
-### Configuration Management (`config`)
+### 設定管理 (`config`)
 
-Manage `gwe` (and `git`) configuration values directly.
+`gwe` (および `git`) の設定値を直接管理します。
 
 ```powershell
-# Get a value
+# 設定値を取得
 gwe config get gwe.worktrees.dir
 
-# Set a value
+# 設定値を設定
 gwe config set gwe.worktrees.dir "../worktree"
 
-# Unset a value
+# 設定値を削除
 gwe config unset gwe.worktrees.dir
 ```
 
-Configuration
--------------
+設定
+----
 
-GWE is configured via Git configuration variables (`gwe.*`). You can manage them with standard `git config` or the `gwe config` helper.
+GWE は Git 設定変数 (`gwe.*`) を使用して設定します。標準の `git config` または `gwe config` ヘルパーで管理できます。
 
-### Base directory
+### ベースディレクトリ
 
 ```powershell
-# Set base directory for worktrees (relative to repo root, or absolute)
+# worktree のベースディレクトリを設定 (リポジトリルートからの相対パス、または絶対パス)
 gwe config set gwe.worktrees.dir "../worktree"
 ```
 
-- Relative paths are resolved from the Git repo root.
-- Absolute paths are also supported.
+- 相対パスは Git リポジトリルートから解決されます。
+- 絶対パスもサポートされています。
 
 
-### Hooks
+### フック
 
-You can define hooks to run after worktree creation using git config.
+worktree 作成後に実行するフックを git config で定義できます。
 
 ```powershell
-# Copy a file pattern (glob) from main worktree to new worktree
+# メイン worktree から新しい worktree へファイルパターン (glob) をコピー
 gwe config add gwe.copy.include "*.env"
 
-# Run a command after creation
+# 作成後にコマンドを実行
 gwe config add gwe.hook.postcreate "npm ci"
 ```
 
 
-Exit Codes
+終了コード
 ----------
 
-`gwe` uses structured exit codes to distinguish error types:
+`gwe` はエラータイプを区別するために構造化された終了コードを使用します:
 
-- `0`: success
-- `1`: user errors (invalid arguments, unknown worktree, etc.)
-- `2`: configuration errors
-- `3`: Git command failures
-- `10`: unexpected internal errors
+| コード | 意味 |
+|--------|------|
+| `0` | 成功 |
+| `1` | ユーザーエラー (無効な引数、不明な worktree など) |
+| `2` | 設定エラー |
+| `3` | Git コマンドの失敗 |
+| `10` | 予期しない内部エラー |
 
 
-License
--------
+よく使うパターン
+----------------
 
-MIT License. See `LICENSE` file for details.
+### 新機能の開発を始める
+
+```bash
+# 新しいブランチで worktree を作成し、Cursor で開く
+gwe cursor -b feature/awesome-feature
+
+# または Claude Code で開く
+gwe claude -b feature/awesome-feature
+```
+
+### リモートブランチをローカルで作業する
+
+```bash
+# リモートブランチを追跡するローカルブランチを作成
+gwe cursor --track origin/feature/someone-else -b feature/someone-else
+```
+
+### 複数の worktree で並行作業
+
+```bash
+# 3つの worktree を作成し、分割ペインで Claude を起動
+gwe claude -x 3 -b feature/parallel-work
+# → feature/parallel-work-1, feature/parallel-work-2, feature/parallel-work-3 が作成される
+```
+
+### worktree 間の移動
+
+```bash
+# 現在の worktree を確認
+gwe list
+
+# 別の worktree に移動
+gwe cd feature/awesome-feature
+
+# メイン worktree に戻る
+gwe cd @
+```
+
+### 作業完了後のクリーンアップ
+
+```bash
+# メイン worktree に移動してから削除
+gwe cd @
+
+# worktree のみ削除（ブランチは残す）
+gwe rm feature/awesome-feature
+
+# worktree とブランチを一緒に削除
+gwe rm -b feature/awesome-feature
+
+# マージされていないブランチも強制削除
+gwe rm -b --force-branch feature/abandoned-feature
+```
+
+### プロジェクト初期設定（推奨）
+
+```bash
+# .env ファイルを新規 worktree にコピーする設定
+gwe config add gwe.copy.include "*.env"
+gwe config add gwe.copy.include ".env.*"
+
+# worktree 作成後に依存関係をインストール
+gwe config add gwe.hook.postcreate "npm ci"
+
+# デフォルトエディタを設定（gwe -e で使用）
+gwe config set gwe.defaultEditor "cursor"
+
+# デフォルト CLI を設定（gwe -c で使用）
+gwe config set gwe.defaultCli "claude"
+```
+
+### 緊急のホットフィックス
+
+```bash
+# 特定のコミットから hotfix ブランチを作成
+gwe cursor abc1234 -b hotfix/critical-bug
+
+# 作業が終わったら削除
+gwe cd @
+gwe rm -b hotfix/critical-bug
+```
+
+
+コマンドリファレンス
+--------------------
+
+### グローバルオプション
+
+| オプション | 説明 |
+|-----------|------|
+| `-v, --verbose` | 詳細ログ出力（stderr） |
+| `--quiet` | 標準出力を最小限に（エラーのみ） |
+| `--repo <PATH>` | 任意のディレクトリを Git リポジトリ root として扱う |
+
+### ツールコマンドのオプション
+
+| オプション | 説明 |
+|-----------|------|
+| `-b, --branch <BRANCH>` | 新規ブランチ名（指定時は常に新規作成） |
+| `--track <REMOTE/BRANCH>` | 追跡する remote/branch |
+| `-x, --multiplier <COUNT>` | 並列 worktree 作成（1-5、分割ペインで起動） |
+| `-- <ARGS>...` | ツールに渡す引数 |
+
+### 設定キー一覧
+
+| キー | 説明 | 例 |
+|------|------|-----|
+| `gwe.worktrees.dir` | worktree のベースディレクトリ | `../worktree` |
+| `gwe.defaultBranch` | デフォルトブランチ | `main` |
+| `gwe.defaultEditor` | デフォルトエディタ (`-e`) | `cursor` |
+| `gwe.defaultCli` | デフォルト CLI ツール (`-c`) | `claude` |
+| `gwe.copy.include` | コピーするファイルパターン | `*.env` |
+| `gwe.hook.postcreate` | 作成後に実行するコマンド | `npm ci` |
+
+
+ライセンス
+----------
+
+MIT License. 詳細は `LICENSE` ファイルを参照してください。

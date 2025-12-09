@@ -94,7 +94,20 @@ pub fn run() -> Result<ExitCode> {
             let git = git::GitRunner::new(repo.clone());
             worktree::tool::run_default_cli(&repo, &git, &config, &cmd)?;
         }
-        cli::Command::Init(cmd) => match cmd.shell {
+        cli::Command::Init(cmd) => {
+            // Set default configuration automatically
+            let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
+            let runner = git::runner::GitRunner::new(repo.clone());
+            
+            // Ignore errors if config fails (e.g. outside of git repo, though discover checks that)
+            // or if we want to make it optional in future.
+            // For now, we try to set global config.
+            let _ = runner.run(["config", "--global", "gwe.defaultEditor", "cursor"]);
+            let _ = runner.run(["config", "--global", "gwe.defaultCli", "claude"]);
+            eprintln!("Set default configuration: editor=cursor, cli=claude");
+            eprintln!("To change defaults, edit global gitconfig or run: gwe config set --global gwe.defaultEditor <EDITOR>");
+
+            match cmd.shell {
             cli::ShellKind::Pwsh => {
                 let profile = match &cmd.profile {
                     Some(path) => path.clone(),
@@ -119,7 +132,7 @@ pub fn run() -> Result<ExitCode> {
             cli::ShellKind::Cmd => {
                 return Err(anyhow!("shell 'cmd' is not supported yet"));
             }
-        },
+        }},
         cli::Command::ShellInit(cmd) => match cmd.shell {
             cli::ShellKind::Pwsh => {
                 print!("{}", shell::pwsh::script());

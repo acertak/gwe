@@ -16,16 +16,11 @@ function Get-GweExePath {
 }
 
 function gwe {
-    param(
-        [Parameter(ValueFromRemainingArguments = $true)]
-        [string[]] $Args
-    )
-
     $exe = Get-GweExePath
-    $output = & $exe @Args
+    $output = & $exe @args
     $exitCode = $LASTEXITCODE
 
-    if ($exitCode -eq 0 -and $Args.Count -gt 0 -and $Args[0] -eq 'cd') {
+    if ($exitCode -eq 0 -and $args.Count -gt 0 -and $args[0] -eq 'cd') {
         $destination = ($output | Select-Object -Last 1).Trim()
         if ($destination) {
             Set-Location $destination
