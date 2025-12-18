@@ -6,7 +6,7 @@ Rust 製の Git worktree ヘルパーツールです。"gwe" は **Git Worktree 
 Git worktree を快適に扱うための CLI ツールです。Windows と macOS に対応しています。  
 For the English version of the README, see `README.en.md`.
 
-> Status: 1.0.0. 日常的な利用に十分な機能が揃っています。
+> Status: 1.1.0. 日常的な利用に十分な機能が揃っています。
 
 > **注意:**
 > v0.2.0 までは `wtp` (Git Worktree Pro) をベースにしていましたが、v0.3.0 からは `wtp` ベースを廃止し、完全なオリジナル実装となりました。これに伴い、コマンド名も `wtw` から `gwe` に変更されました。
@@ -70,7 +70,7 @@ For the English version of the README, see `README.en.md`.
 ```powershell
 # 1. リポジトリの "Releases" ページから ZIP をダウンロード
 # 2. 任意の場所に解凍 (例: C:\tools\gwe)
-Expand-Archive -Path .\gwe-1.0.0-x86_64-pc-windows-msvc.zip -DestinationPath C:\tools\gwe
+Expand-Archive -Path .\gwe-1.1.0-x86_64-pc-windows-msvc.zip -DestinationPath C:\tools\gwe
 
 # 3. そのディレクトリを PATH に追加 (一度だけ)
 [System.Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\tools\gwe", "User")
@@ -85,7 +85,7 @@ gwe --help
 # 1. リポジトリの "Releases" ページから tar.gz をダウンロード
 # 2. 任意の場所に解凍 (例: ~/tools/gwe)
 mkdir -p ~/tools/gwe
-tar -xzf gwe-1.0.0-aarch64-apple-darwin.tar.gz -C ~/tools/gwe
+tar -xzf gwe-1.1.0-aarch64-apple-darwin.tar.gz -C ~/tools/gwe
 
 # 3. そのディレクトリを PATH に追加 (~/.zshrc または ~/.bashrc に追記)
 echo 'export PATH="$HOME/tools/gwe:$PATH"' >> ~/.zshrc
@@ -244,8 +244,9 @@ gwe claude -x 3 -b feature/parallel
 - **エディタ**: `gwe cursor`, `gwe wind` (Windsurf), `gwe anti` (Antigravity)
 - **AI CLI**: `gwe claude`, `gwe codex`, `gwe gemini` (新しいターミナルで起動)
 - **汎用**:
-  - `gwe -e` (`gwe config set gwe.defaultEditor ...` で設定されたエディタ)
-  - `gwe -c` (`gwe config set gwe.defaultCli ...` で設定された CLI)
+  - `gwe -e` (`gwe config set gwe.defaultEditor ...`で設定されたエディタ)
+  - `gwe -c` (`gwe config set gwe.defaultCli ...`で設定された CLI)
+  - `gwe cli` (`gwe config set gwe.multiCli claude,codex` のようにカンマ区切りで複数の CLI を分割ペインで起動。`-b`指定時はツールごとに個別の worktree を作成)
 
 デフォルトでは、worktree はリポジトリルートからの相対パス `../worktree` 配下に配置されます。
 
@@ -330,6 +331,9 @@ gwe config get gwe.worktrees.dir
 
 # 設定値を設定
 gwe config set gwe.worktrees.dir "../worktree"
+
+# グローバル設定に設定 (-g)
+gwe config set -g gwe.defaultEditor "cursor"
 
 # 設定値を削除
 gwe config unset gwe.worktrees.dir
@@ -492,6 +496,7 @@ gwe rm -b hotfix/critical-bug
 | `gwe.defaultBranch` | デフォルトブランチ | `main` |
 | `gwe.defaultEditor` | デフォルトエディタ (`-e`) | `cursor` |
 | `gwe.defaultCli` | デフォルト CLI ツール (`-c`) | `claude` |
+| `gwe.multiCli` | `gwe cli` で起動するツール一覧 | `claude` |
 | `gwe.copy.include` | コピーするファイルパターン | `*.env` |
 | `gwe.hook.postcreate` | 作成後に実行するコマンド | `npm ci` |
 

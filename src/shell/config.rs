@@ -17,24 +17,26 @@ pub fn run(repo: &RepoContext, cmd: ConfigCommand) -> Result<()> {
             }
         }
         ConfigAction::Set { key, value, global } => {
+            let value_str = value.join(" ");
             let mut args = vec!["config"];
             if global {
                 args.push("--global");
             }
             args.push(&key);
-            args.push(&value);
+            args.push(&value_str);
             runner.run(args)?;
-            eprintln!("Set '{}' = '{}'", key, value);
+            eprintln!("Set '{}' = '{}'", key, value_str);
         }
         ConfigAction::Add { key, value, global } => {
+            let value_str = value.join(" ");
             let mut args = vec!["config", "--add"];
             if global {
                 args.push("--global");
             }
             args.push(&key);
-            args.push(&value);
+            args.push(&value_str);
             runner.run(args)?;
-            eprintln!("Added '{}' = '{}'", key, value);
+            eprintln!("Added '{}' = '{}'", key, value_str);
         }
         ConfigAction::Unset { key, global } => {
             let mut args = vec!["config", "--unset"];

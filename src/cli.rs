@@ -61,6 +61,8 @@ pub enum Command {
     /// デフォルトCLIを起動 (-c)
     #[command(short_flag = 'c')]
     RunCli(ToolCommand),
+    /// マルチCLIを分割ペインで起動
+    Cli(ToolCommand),
 }
 
 #[derive(Args, Debug, Clone)]
@@ -101,21 +103,23 @@ pub enum ConfigAction {
     /// 設定値を設定
     Set {
         key: String,
-        value: String,
-        #[arg(long)]
+        #[arg(required = true, num_args = 1..)]
+        value: Vec<String>,
+        #[arg(short = 'g', long)]
         global: bool,
     },
     /// 値を追加（マルチバリュー用）
     Add {
         key: String,
-        value: String,
-        #[arg(long)]
+        #[arg(required = true, num_args = 1..)]
+        value: Vec<String>,
+        #[arg(short = 'g', long)]
         global: bool,
     },
     /// 設定値を削除
     Unset {
         key: String,
-        #[arg(long)]
+        #[arg(short = 'g', long)]
         global: bool,
     },
 }

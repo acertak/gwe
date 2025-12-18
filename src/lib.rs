@@ -94,6 +94,12 @@ pub fn run() -> Result<ExitCode> {
             let git = git::GitRunner::new(repo.clone());
             worktree::tool::run_default_cli(&repo, &git, &config, &cmd)?;
         }
+        cli::Command::Cli(cmd) => {
+            let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
+            let config = config::load_config(&repo)?;
+            let git = git::GitRunner::new(repo.clone());
+            worktree::tool::run_multi_cli(&repo, &git, &config, &cmd)?;
+        }
         cli::Command::Init(cmd) => {
             // Set default configuration automatically
             let repo = git::rev::RepoContext::discover(globals.repo.clone())?;

@@ -6,7 +6,7 @@ Git worktree helper written in Rust. "gwe" stands for **Git Worktree Extension**
 CLI tool to make Git worktree comfortable. Supports Windows and macOS.  
 See `README.md` for the Japanese version.
 
-> Status: 1.0.0. The CLI is ready for daily use.
+> Status: 1.1.0. The CLI is ready for daily use.
 
 > **Notice:**
 > Until v0.2.0, this tool was based on `wtp` (Git Worktree Pro). Since v0.3.0, it has been rewritten as an original implementation, and the command name has been changed from `wtw` to `gwe`.
@@ -70,7 +70,7 @@ Each archive should contain:
 ```powershell
 # 1. Download the ZIP from this repository's "Releases" page
 # 2. Extract it somewhere, for example:
-Expand-Archive -Path .\gwe-1.0.0-x86_64-pc-windows-msvc.zip -DestinationPath C:\tools\gwe
+Expand-Archive -Path .\gwe-1.1.0-x86_64-pc-windows-msvc.zip -DestinationPath C:\tools\gwe
 
 # 3. Add that directory to your PATH (once)
 [System.Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\tools\gwe", "User")
@@ -85,7 +85,7 @@ gwe --help
 # 1. Download the tar.gz from this repository's "Releases" page
 # 2. Extract it somewhere, for example:
 mkdir -p ~/tools/gwe
-tar -xzf gwe-1.0.0-aarch64-apple-darwin.tar.gz -C ~/tools/gwe
+tar -xzf gwe-1.1.0-aarch64-apple-darwin.tar.gz -C ~/tools/gwe
 
 # 3. Add that directory to your PATH (add to ~/.zshrc or ~/.bashrc)
 echo 'export PATH="$HOME/tools/gwe:$PATH"' >> ~/.zshrc

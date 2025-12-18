@@ -69,7 +69,10 @@ fn run_terminal_tool_multi(
 
     // ターミナル起動
     println!("\nLaunching {} terminals...", paths.len());
-    spawn_multiple_terminals(tool_name, &paths, args)
+    let tools_with_paths: Vec<(String, PathBuf)> = paths.into_iter()
+        .map(|p| (tool_name.to_string(), p))
+        .collect();
+    spawn_multiple_tools(&tools_with_paths, args)
 }
 
 pub fn run_default_editor(
@@ -97,6 +100,56 @@ pub fn run_default_cli(
     
     // CLIツールは基本的にターミナルで実行されるべき
     run_terminal_tool_command(repo, git, config, cmd, cli)
+}
+
+pub fn run_multi_cli(
+    repo: &RepoContext,
+    git: &GitRunner,
+    config: &Config,
+    cmd: &ToolCommand,
+) -> Result<()> {
+    if config.multi_cli.is_empty() {
+        return Err(anyhow!("No multi-CLI configured. Set it with 'gwe config add gwe.multiCli <NAME>'"));
+    }
+
+    let tools = &config.multi_cli;
+    let count = tools.len() as u8;
+
+    let tools_with_paths: Vec<(String, PathBuf)> = if let Some(base_branch) = &cmd.branch {
+        // -b が指定されている場合は複数ワークツリーを作成
+        use crate::error::AppError;
+
+        if tools.len() > 5 {
+            return Err(AppError::user(format!("Too many tools in multiCli (max 5 for split panes, found {})", tools.len())).into());
+        }
+        
+        // target との併用はエラー (-x と同じ)
+        if cmd.target.is_some() {
+            return Err(AppError::user("'gwe cli' with -b/--branch cannot be used with target worktree").into());
+        }
+
+        let paths = create::create_multiple_worktrees(
+            repo,
+            git,
+            config,
+            base_branch,
+            count,
+            cmd.track.as_deref(),
+        )?;
+
+        tools.iter().zip(paths.into_iter())
+            .map(|(t, p)| (t.clone(), p))
+            .collect()
+    } else {
+        // それ以外（既存ワークツリー指定など）は単一ワークツリー
+        let target_path = create::ensure_worktree(repo, git, config, cmd)?;
+        tools.iter()
+            .map(|tool| (tool.clone(), target_path.clone()))
+            .collect()
+    };
+
+    println!("\nLaunching {} tools in split panes...", tools_with_paths.len());
+    spawn_multiple_tools(&tools_with_paths, &cmd.args)
 }
 
 fn is_terminal_tool(name: &str) -> bool {
@@ -265,28 +318,28 @@ fn shell_quote_cmd(s: &str) -> String {
 }
 
 // ========================================
-// 複数ターミナル起動
+// 複数ツール起動
 // ========================================
 
-fn spawn_multiple_terminals(tool: &str, paths: &[PathBuf], args: &[String]) -> Result<()> {
+fn spawn_multiple_tools(tools_with_paths: &[(String, PathBuf)], args: &[String]) -> Result<()> {
     #[cfg(target_os = "windows")]
     {
         // Windows Terminal を試す
-        if try_spawn_windows_terminal(tool, paths, args).is_ok() {
+        if try_spawn_windows_terminal(tools_with_paths, args).is_ok() {
             return Ok(());
         }
         // フォールバック: 個別ウィンドウ
-        spawn_multiple_windows(tool, paths, args)
+        spawn_multiple_windows(tools_with_paths, args)
     }
 
     #[cfg(target_os = "macos")]
     {
         // iTerm2 を試す
-        if try_spawn_iterm_splits(tool, paths, args).is_ok() {
+        if try_spawn_iterm_splits(tools_with_paths, args).is_ok() {
             return Ok(());
         }
         // フォールバック: 複数 Terminal.app ウィンドウ
-        spawn_multiple_terminals_macos(tool, paths, args)
+        spawn_multiple_terminals_macos(tools_with_paths, args)
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -339,12 +392,11 @@ fn build_wt_pane_args(cmd_str: &str, path: &Path) -> Vec<String> {
 }
 
 #[cfg(target_os = "windows")]
-fn try_spawn_windows_terminal(tool: &str, paths: &[PathBuf], args: &[String]) -> Result<()> {
+fn try_spawn_windows_terminal(tools_with_paths: &[(String, PathBuf)], args: &[String]) -> Result<()> {
     if !is_windows_terminal_available() {
         return Err(anyhow!("wt.exe not found"));
     }
 
-    let cmd_str = build_tool_command_str(tool, args);
     let mut wt_args: Vec<String> = Vec::new();
 
     // レイアウト仕様:
@@ -353,64 +405,80 @@ fn try_spawn_windows_terminal(tool: &str, paths: &[PathBuf], args: &[String]) ->
     // 4分割: [1][2] / [3][4] 2x2グリッド
     // 5分割: [1][2][3] / [4][5][空] 2x3グリッド
 
-    match paths.len() {
+    match tools_with_paths.len() {
         1 => {
             // 1つだけ
-            wt_args.extend(build_wt_pane_args(&cmd_str, &paths[0]));
+            let (tool, path) = &tools_with_paths[0];
+            let cmd_str = build_tool_command_str(tool, args);
+            wt_args.extend(build_wt_pane_args(&cmd_str, path));
         }
         2 => {
             // [1][2] 垂直分割
-            wt_args.extend(build_wt_pane_args(&cmd_str, &paths[0]));
+            let (t1, p1) = &tools_with_paths[0];
+            let (t2, p2) = &tools_with_paths[1];
+            wt_args.extend(build_wt_pane_args(&build_tool_command_str(t1, args), p1));
             wt_args.extend([";".to_string(), "split-pane".to_string(), "-V".to_string()]);
-            wt_args.extend(build_wt_pane_args(&cmd_str, &paths[1]));
+            wt_args.extend(build_wt_pane_args(&build_tool_command_str(t2, args), p2));
         }
         3 => {
             // [1][2] / [3][空] 2x2グリッド
-            wt_args.extend(build_wt_pane_args(&cmd_str, &paths[0]));
+            let (t1, p1) = &tools_with_paths[0];
+            let (t2, p2) = &tools_with_paths[1];
+            let (t3, p3) = &tools_with_paths[2];
+            wt_args.extend(build_wt_pane_args(&build_tool_command_str(t1, args), p1));
             // 右に分割 [1][2]
             wt_args.extend([";".to_string(), "split-pane".to_string(), "-V".to_string()]);
-            wt_args.extend(build_wt_pane_args(&cmd_str, &paths[1]));
+            wt_args.extend(build_wt_pane_args(&build_tool_command_str(t2, args), p2));
             // 左に戻って下に分割 [3]
             wt_args.extend([";".to_string(), "move-focus".to_string(), "left".to_string()]);
             wt_args.extend([";".to_string(), "split-pane".to_string(), "-H".to_string()]);
-            wt_args.extend(build_wt_pane_args(&cmd_str, &paths[2]));
+            wt_args.extend(build_wt_pane_args(&build_tool_command_str(t3, args), p3));
         }
         4 => {
             // [1][2] / [3][4] 2x2グリッド
-            wt_args.extend(build_wt_pane_args(&cmd_str, &paths[0]));
+            let (t1, p1) = &tools_with_paths[0];
+            let (t2, p2) = &tools_with_paths[1];
+            let (t3, p3) = &tools_with_paths[2];
+            let (t4, p4) = &tools_with_paths[3];
+            wt_args.extend(build_wt_pane_args(&build_tool_command_str(t1, args), p1));
             // 右に分割 [1][2]
             wt_args.extend([";".to_string(), "split-pane".to_string(), "-V".to_string()]);
-            wt_args.extend(build_wt_pane_args(&cmd_str, &paths[1]));
+            wt_args.extend(build_wt_pane_args(&build_tool_command_str(t2, args), p2));
             // 左に戻って下に分割 [3]
             wt_args.extend([";".to_string(), "move-focus".to_string(), "left".to_string()]);
             wt_args.extend([";".to_string(), "split-pane".to_string(), "-H".to_string()]);
-            wt_args.extend(build_wt_pane_args(&cmd_str, &paths[2]));
+            wt_args.extend(build_wt_pane_args(&build_tool_command_str(t3, args), p3));
             // 右に移動して下に分割 [4]
             wt_args.extend([";".to_string(), "move-focus".to_string(), "right".to_string()]);
             wt_args.extend([";".to_string(), "split-pane".to_string(), "-H".to_string()]);
-            wt_args.extend(build_wt_pane_args(&cmd_str, &paths[3]));
+            wt_args.extend(build_wt_pane_args(&build_tool_command_str(t4, args), p4));
         }
         5 => {
             // [1][2][3] / [4][5][空] 2x3グリッド
-            wt_args.extend(build_wt_pane_args(&cmd_str, &paths[0]));
+            let (t1, p1) = &tools_with_paths[0];
+            let (t2, p2) = &tools_with_paths[1];
+            let (t3, p3) = &tools_with_paths[2];
+            let (t4, p4) = &tools_with_paths[3];
+            let (t5, p5) = &tools_with_paths[4];
+            wt_args.extend(build_wt_pane_args(&build_tool_command_str(t1, args), p1));
             // 右に分割 [1][2]
             wt_args.extend([";".to_string(), "split-pane".to_string(), "-V".to_string()]);
-            wt_args.extend(build_wt_pane_args(&cmd_str, &paths[1]));
+            wt_args.extend(build_wt_pane_args(&build_tool_command_str(t2, args), p2));
             // さらに右に分割 [1][2][3]
             wt_args.extend([";".to_string(), "split-pane".to_string(), "-V".to_string()]);
-            wt_args.extend(build_wt_pane_args(&cmd_str, &paths[2]));
+            wt_args.extend(build_wt_pane_args(&build_tool_command_str(t3, args), p3));
             // 左端に戻って下に分割 [4]
             wt_args.extend([";".to_string(), "move-focus".to_string(), "left".to_string()]);
             wt_args.extend([";".to_string(), "move-focus".to_string(), "left".to_string()]);
             wt_args.extend([";".to_string(), "split-pane".to_string(), "-H".to_string()]);
-            wt_args.extend(build_wt_pane_args(&cmd_str, &paths[3]));
+            wt_args.extend(build_wt_pane_args(&build_tool_command_str(t4, args), p4));
             // 右に移動して下に分割 [5]
             wt_args.extend([";".to_string(), "move-focus".to_string(), "right".to_string()]);
             wt_args.extend([";".to_string(), "split-pane".to_string(), "-H".to_string()]);
-            wt_args.extend(build_wt_pane_args(&cmd_str, &paths[4]));
+            wt_args.extend(build_wt_pane_args(&build_tool_command_str(t5, args), p5));
         }
         _ => {
-            return Err(anyhow!("Unsupported number of panes: {}", paths.len()));
+            return Err(anyhow!("Unsupported number of panes: {}", tools_with_paths.len()));
         }
     }
 
@@ -426,8 +494,8 @@ fn try_spawn_windows_terminal(tool: &str, paths: &[PathBuf], args: &[String]) ->
 }
 
 #[cfg(target_os = "windows")]
-fn spawn_multiple_windows(tool: &str, paths: &[PathBuf], args: &[String]) -> Result<()> {
-    for path in paths {
+fn spawn_multiple_windows(tools_with_paths: &[(String, PathBuf)], args: &[String]) -> Result<()> {
+    for (tool, path) in tools_with_paths {
         spawn_terminal(tool, path, args)?;
     }
     Ok(())
@@ -466,7 +534,7 @@ fn build_terminal_command_str(tool: &str, path: &Path, args: &[String]) -> Strin
 }
 
 #[cfg(target_os = "macos")]
-fn try_spawn_iterm_splits(tool: &str, paths: &[PathBuf], args: &[String]) -> Result<()> {
+fn try_spawn_iterm_splits(tools_with_paths: &[(String, PathBuf)], args: &[String]) -> Result<()> {
     if !is_iterm_available() {
         return Err(anyhow!("iTerm not found"));
     }
@@ -477,12 +545,12 @@ fn try_spawn_iterm_splits(tool: &str, paths: &[PathBuf], args: &[String]) -> Res
     // 4分割: [1][2] / [3][4] 2x2グリッド
     // 5分割: [1][2][3] / [4][5][空] 2x3グリッド
 
-    let cmds: Vec<String> = paths
+    let cmds: Vec<String> = tools_with_paths
         .iter()
-        .map(|p| build_terminal_command_str(tool, p, args))
+        .map(|(t, p)| build_terminal_command_str(t, p, args))
         .collect();
 
-    let script = match paths.len() {
+    let script = match tools_with_paths.len() {
         1 => {
             format!(
                 r#"tell application "iTerm"
@@ -598,7 +666,7 @@ end tell"#,
             )
         }
         _ => {
-            return Err(anyhow!("Unsupported number of panes: {}", paths.len()));
+            return Err(anyhow!("Unsupported number of panes: {}", tools_with_paths.len()));
         }
     };
 
@@ -615,8 +683,8 @@ end tell"#,
 }
 
 #[cfg(target_os = "macos")]
-fn spawn_multiple_terminals_macos(tool: &str, paths: &[PathBuf], args: &[String]) -> Result<()> {
-    for path in paths {
+fn spawn_multiple_terminals_macos(tools_with_paths: &[(String, PathBuf)], args: &[String]) -> Result<()> {
+    for (tool, path) in tools_with_paths {
         spawn_terminal(tool, path, args)?;
     }
     Ok(())

@@ -48,6 +48,15 @@ fn load_from_git_config(repo: &RepoContext, config: &mut Config) -> Result<()> {
             "gwe.defaultcli" => {
                 config.default_cli = Some(value.to_string());
             }
+            "gwe.multicli" => {
+                // カンマまたは空白で分割し、トリミングして空でないもののみを追加
+                for v in value.split(|c: char| c == ',' || c.is_whitespace()) {
+                    let v = v.trim();
+                    if !v.is_empty() {
+                        config.multi_cli.push(v.to_string());
+                    }
+                }
+            }
             "gwe.copy.include" => {
                 config.hooks.post_create.push(Hook::GlobCopy(GlobCopyHook {
                     pattern: value.to_string(),
