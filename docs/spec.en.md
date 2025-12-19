@@ -800,7 +800,6 @@ gwe config unset <KEY> [-g|--global]
 - `gwe.defaultcli`: Default CLI tool to launch with `gwe -c` (required for `gwe -c`).
 - `gwe.multicli`: List of tools to launch with `gwe cli` (comma- or whitespace-separated).
 - `gwe.copy.include`: Multi-value key for file patterns to copy (Glob copy hooks).
-- `gwe.copy.exclude`: Multi-value key for exclude patterns when copying (glob-style; `.git` is always excluded).
 - `gwe.hook.postcreate`: Multi-value key for commands to run (Command hooks).
 
 
@@ -919,9 +918,6 @@ Supported keys:
 - `gwe.copy.include` (multi-value string)
   Glob patterns for files to copy from the main worktree to new worktrees.
   Each value creates a `glob_copy` hook.
-
-- `gwe.copy.exclude` (multi-value string)
-  Exclude patterns applied when copying files (glob-style; `.git` is always excluded).
 
 - `gwe.hook.postcreate` (multi-value string)
   Shell commands to execute after worktree creation. Each value creates a

@@ -805,9 +805,6 @@ GWE は `gwe.*` 名前空間の git config 変数から設定を読み込みま�
 - `gwe.copy.include` (マルチバリュー文字列)
   メイン worktree から新しい worktree にコピーするファイルの Glob パターン。各値が `glob_copy` フックを作成します。
 
-- `gwe.copy.exclude` (マルチバリュー文字列)
-  `gwe.copy.include` などでコピーする際に除外するファイルの Glob パターン。
-
 - `gwe.hook.postcreate` (マルチバリュー文字列)
   worktree 作成後に実行するシェルコマンド。各値が `command` フックを作成します。
 

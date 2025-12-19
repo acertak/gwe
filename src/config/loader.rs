@@ -62,15 +62,6 @@ fn load_from_git_config(repo: &RepoContext, config: &mut Config) -> Result<()> {
                     pattern: value.to_string(),
                 }));
             }
-            "gwe.copy.exclude" => {
-                // カンマまたは空白で分割し、トリミングして空でないもののみを追加
-                for v in value.split(|c: char| c == ',' || c.is_whitespace()) {
-                    let v = v.trim();
-                    if !v.is_empty() {
-                        config.copy_exclude.push(v.to_string());
-                    }
-                }
-            }
             "gwe.hook.postcreate" => {
                 // Map to CommandHook
                 config.hooks.post_create.push(Hook::Command(CommandHook {

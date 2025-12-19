@@ -160,33 +160,6 @@ impl<'a> HookExecutor<'a> {
                 }
             }
         }
-
-        #[cfg(windows)]
-        let options = glob::MatchOptions {
-            case_sensitive: false,
-            ..Default::default()
-        };
-        #[cfg(not(windows))]
-        let options = glob::MatchOptions::default();
-
-        for exclude_pattern in &self.config.copy_exclude {
-            if let Ok(matcher) = glob::Pattern::new(exclude_pattern) {
-                // パス自体およびその親ディレクトリをすべてチェック
-                for ancestor in relative_path.ancestors() {
-                    let path_str = ancestor.to_string_lossy();
-                    if path_str.is_empty() || path_str == "." {
-                        continue;
-                    }
-
-                    // globマッチングのためにパス区切り文字を正規化 (Windows用)
-                    let normalized_path = path_str.replace('\\', "/");
-
-                    if matcher.matches_with(&normalized_path, options) {
-                        return true;
-                    }
-                }
-            }
-        }
         false
     }
 
