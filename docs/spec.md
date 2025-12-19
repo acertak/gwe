@@ -44,7 +44,7 @@ GWE (Git Worktree Extension) は、Git worktree を管理するための Windows
   - `"root"`（メイン worktree の大文字小文字を区別しないエイリアス）。
   - リポジトリ名（メインルートの最後のパスコンポーネント）、大文字小文字を区別しない。
   - ブランチ名（例: `feature/auth`）。
-  - 表示名（例: Windows 上の `feature\auth`）。
+  - 表示名（例: Windows 上の `<repo_name>\feature\auth`）。
   - worktree ディレクトリ名（最後のパスコンポーネント）。
 
 
@@ -78,12 +78,12 @@ GWE (Git Worktree Extension) は、Git worktree を管理するための Windows
 - `worktree`  
   worktree を操作するサブコマンドの実装:
 
-  - `worktree::add`: `gwe add` の挙動（worktree 作成、パスマッピング、競合検出、作成後フック）。
+  - `worktree::create`: worktree 作成・再利用（パスマッピング、競合検出、作成後フック）。
   - `worktree::list`: `gwe list` の挙動（テーブルおよび JSON 出力）。
   - `worktree::rm`: `gwe rm` の挙動（worktree およびオプションのブランチ削除）。
   - `worktree::resolve`: `gwe cd` の挙動（名前解決）。
   - `worktree::common`: パス正規化、表示名、および「管理対象」チェックのための横断的なヘルパー。
-  - `worktree::tool`: `gwe cursor`, `gwe wind`, `gwe anti` の挙動（外部ツール起動）。
+  - `worktree::tool`: `gwe add`, `gwe cursor`, `gwe wind`, `gwe anti`, `gwe claude`, `gwe codex`, `gwe gemini`, `gwe -e`, `gwe -c`, `gwe cli` の挙動（外部ツール起動 / ターミナル起動）。
 
 - `hooks`  
   設定で定義された `copy`、`glob_copy`、`command` フックを実行する作成後フックエグゼキュータ（`HookExecutor`）。
@@ -139,7 +139,7 @@ GWE (Git Worktree Extension) は、Git worktree を管理するための Windows
 
 `Command` 列挙型は利用可能なサブコマンドを定義します:
 
-- `add` (`AddCommand`)
+- `add` (`ToolCommand`)
 - `list` (`ListCommand`)
 - `rm` (`RmCommand`)
 - `cd` (`CdCommand`)
@@ -149,6 +149,12 @@ GWE (Git Worktree Extension) は、Git worktree を管理するための Windows
 - `cursor` (`ToolCommand`)
 - `wind` (`ToolCommand`)
 - `anti` (`ToolCommand`)
+- `claude` (`ToolCommand`)
+- `codex` (`ToolCommand`)
+- `gemini` (`ToolCommand`)
+- `-e` (`ToolCommand`)（デフォルトエディタ起動）
+- `-c` (`ToolCommand`)（デフォルトCLI起動）
+- `cli` (`ToolCommand`)
 
 各サブコマンドについて以下に詳述します。
 
@@ -157,19 +163,19 @@ GWE (Git Worktree Extension) は、Git worktree を管理するための Windows
 ^^^^^^^^^^^^^^^
 
 **目的**  
-設定されたベースディレクトリ下に新しい Git worktree を作成し、オプションでブランチの作成または追跡を行い、作成後フックを実行し、オプションでエディタで worktree を開きます。
+設定されたベースディレクトリ下に Git worktree を作成します（存在する worktree に解決できる場合は再利用します）。新規作成された場合は作成後フックを実行します。成功時は、解決された worktree の絶対パスを標準出力に出力します。
 
 **形式**
 
 ```text
-gwe add [OPTIONS] [BRANCH_OR_COMMIT]
+gwe add [WORKTREE] [OPTIONS]
 ```
 
-**オプション (AddCommand)**
+**オプション (ToolCommand)**
 
-- `BRANCH_OR_COMMIT` (位置引数、オプション)  
-  - `--branch` が指定された場合、これは新しいブランチと worktree の開始点（commitish）として扱われます。
-  - そうでない場合、これは必須であり、worktree の commitish として直接使用されます。
+- `WORKTREE` (位置引数、オプション)  
+  - `--branch` が指定された場合、これは新しいブランチと worktree の開始点（commitish）として扱われます（省略可）。
+  - そうでない場合、これは必須であり、既存ブランチ名または commitish として扱われます。
 
 - `-b, --branch <BRANCH>`  
   worktree 用に作成する新しいブランチの名前。指定された場合:
@@ -179,9 +185,6 @@ gwe add [OPTIONS] [BRANCH_OR_COMMIT]
 
 - `--track <REMOTE/BRANCH>`  
   worktree 作成時に使用するリモート追跡ブランチ。この値は `git worktree add` に commitish として渡されます。ローカルブランチ名は、`--branch` が明示的に指定されない限り、remote/branch 文字列から推論されます。
-
-- `-o, --open`  
-  worktree 作成後、Cursor エディタで開きます。
 
 **引数の検証**
 
@@ -198,11 +201,11 @@ gwe add [OPTIONS] [BRANCH_OR_COMMIT]
 2. そうではなく `--branch` が指定された場合:
 
    - ブランチ名は `--branch` から取得されます。
-   - `git worktree add` の commitish は、存在すれば `BRANCH_OR_COMMIT` から取得されます。そうでなければ `None` となり、Git は worktree ルートからのブランチ作成に独自のデフォルトを使用します。
+   - `git worktree add` の commitish は、存在すれば `WORKTREE` から取得されます。そうでなければ `None` となり、Git は worktree ルートからのブランチ作成に独自のデフォルトを使用します。
 
 3. それ以外（`--track` も `--branch` もない場合）:
 
-   - `BRANCH_OR_COMMIT` は必須です。欠落または空白の場合、コマンドはユーザーエラーで失敗します: `"branch or commit is required"`。
+   - `WORKTREE` は必須です。欠落または空白の場合、コマンドはユーザーエラーで失敗します: `"branch or commit is required"`。
    - commitish は指定された値に設定されます。
    - GWE によって新しいブランチは作成されません。`git worktree add` はパスと commitish のみで呼び出されます。
 
@@ -283,7 +286,7 @@ GWE は `git worktree add` への引数を以下のように構築します:
 
 **ユーザーに表示される出力**
 
-成功時、`gwe add` は標準出力に 1 行を表示します:
+新規作成時、`gwe add` は標準出力に以下の進行メッセージを表示します:
 
 ```text
 Created worktree '<display_name>' at <absolute_path>
@@ -293,7 +296,7 @@ Created worktree '<display_name>' at <absolute_path>
 
 いずれかのフックが失敗した場合、`gwe add` は失敗します（エラーは伝播され `main` によって表示されます）。フックの失敗は内部エラーとして扱われ、終了コード 10 にマッピングされます。
 
-`--open` が指定された場合、作成とフック実行の成功後に worktree が Cursor で開かれます。
+最後に、成功した `gwe add` は **解決された worktree の正規化された絶対パス** を 1 行で出力します。既存 worktree に解決された場合は、作成メッセージやフック実行は行わず、この 1 行のみが出力されます。
 
 
 4.2.2 `gwe list`
@@ -395,7 +398,7 @@ PATH  BRANCH  HEAD  STATUS  UPSTREAM  ABS_PATH
 
 フィールド:
 
-- `name`: 表示名（例: `"@"`, `"feature\\auth"`）。
+- `name`: 表示名（例: `"@"`, `"<repo_name>\\feature\\auth"`）。
 - `branch`: オプションのブランチ名。
 - `head`: 短縮コミットハッシュ（最大 8 文字）。
 - `status`: `"clean"` または `"dirty"`。
@@ -423,18 +426,8 @@ gwe rm [OPTIONS] <WORKTREE>
 - `WORKTREE` (位置引数、必須)  
   ターゲット worktree 識別子。解決は `gwe cd`（セクション 4.2.4 参照）と同じルールに従いますが、メイン worktree は決して削除できません。
 
-- `-f, --force`  
-  `git worktree remove` に `--force` を渡し、dirty な worktree の削除を許可します。
-
 - `-b, --with-branch`  
   worktree 削除後、関連付けられたローカルブランチがあればそれも削除します。
-
-- `--force-branch` (エイリアス: `--fb`)  
-  `--with-branch` と共に使用された場合、`git branch` に `-d` の代わりに `-D` を渡し、マージされていない場合でもブランチを削除できるようにします。`--with-branch` なしで指定された場合、コマンドはユーザーエラーで失敗します:
-
-  ```text
-  --force-branch requires --with-branch
-  ```
 
 **ターゲット解決**
 
@@ -481,7 +474,7 @@ cannot remove the current worktree '<target>': <path>
 
 worktree 削除:
 
-- 引数: `["worktree", "remove", (オプション "--force"), <path>]`。
+- 引数: `["worktree", "remove", "--force", <path>]`（常に `--force` が付与されます）。
 - 成功時: worktree ディレクトリは Git によって削除されます。
 - 失敗時:
 
@@ -490,7 +483,7 @@ worktree 削除:
 
 ブランチ削除（`--with-branch` かつブランチが利用可能な場合）:
 
-- `--force-branch` に応じて `git branch -d <branch>` または `git branch -D <branch>` を使用します。
+- `git branch -D <branch>` を使用します（未マージでも削除されます）。
 - 失敗時:
 
   - stderr が空でなければ、エラーメッセージとして直接使用されます。
@@ -597,7 +590,7 @@ Run 'gwe list' to see available worktrees.
 ^^^^^^^^^^^^^^^^
 
 **目的**  
-`gwe` 用の関数を追記することで、シェルプロファイルにシェル統合をインストールします。
+`gwe` 用の関数を追記することで、シェルプロファイルにシェル統合をインストールします。加えて（現在の実装）、グローバル git config にデフォルト設定を自動セットします。
 
 **形式**
 
@@ -625,6 +618,11 @@ gwe init [--shell <SHELL>] [PROFILE_PATH]
   `HOME` は `USERPROFILE` または `HOME` 環境変数から決定されます。
 
 **挙動**
+
+- （現在の実装）以下をグローバル git config に設定します（既存値があっても上書きされます。失敗は無視されます）:
+  - `gwe.defaultEditor = cursor`
+  - `gwe.defaultCli = claude`
+  - 実行結果のヒントを `stderr` に表示します。
 
 - サポートされているシェル (`pwsh`, `bash`, `zsh`) の場合:
 
@@ -687,8 +685,8 @@ Git 設定値の取得、設定、追加、または設定解除を行います�
 
 ```text
 gwe config get <KEY>
-gwe config set <KEY> <VALUE> [-g|--global]
-gwe config add <KEY> <VALUE> [-g|--global]
+gwe config set <KEY> <VALUE...> [-g|--global]
+gwe config add <KEY> <VALUE...> [-g|--global]
 gwe config unset <KEY> [-g|--global]
 ```
 
@@ -709,41 +707,72 @@ gwe config unset <KEY> [-g|--global]
 **一般的な設定キー**
 
 - `gwe.defaultbranch`: デフォルトのブランチ名。
+- `gwe.defaulteditor`: `gwe -e` で起動するデフォルトエディタ名（未設定時は `cursor`）。
+- `gwe.defaultcli`: `gwe -c` で起動するデフォルト CLI 名（未設定時は `gwe -c` はエラー）。
+- `gwe.multicli`: `gwe cli` で起動するツール一覧（カンマまたは空白区切り）。
 - `gwe.copy.include`: コピーするファイルパターンのためのマルチバリューキー（Glob copy フック）。
 - `gwe.hook.postcreate`: 実行するコマンドのためのマルチバリューキー（Command フック）。
 
 
-4.2.8 `gwe cursor` / `gwe wind` / `gwe anti`
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+4.2.8 ツール起動 (`gwe cursor` / `gwe wind` / `gwe anti` / `gwe claude` / `gwe codex` / `gwe gemini` / `gwe cli` / `gwe -e` / `gwe -c`)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 **目的**  
-外部ツール（Cursor、Windsurf、Antigravity）を worktree で起動します。
+外部ツール（エディタまたは AI CLI）を worktree で起動します。指定された worktree が存在しない場合は作成されます（作成時は作成後フックが実行されます）。
 
 **形式**
 
 ```text
-gwe cursor [WORKTREE] [-- <ARGS>...]
-gwe wind [WORKTREE] [-- <ARGS>...]
-gwe anti [WORKTREE] [-- <ARGS>...]
+gwe cursor [WORKTREE] [OPTIONS] [-- <ARGS>...]
+gwe wind [WORKTREE] [OPTIONS] [-- <ARGS>...]
+gwe anti [WORKTREE] [OPTIONS] [-- <ARGS>...]
+gwe claude [WORKTREE] [OPTIONS] [-- <ARGS>...]
+gwe codex [WORKTREE] [OPTIONS] [-- <ARGS>...]
+gwe gemini [WORKTREE] [OPTIONS] [-- <ARGS>...]
+gwe cli [WORKTREE] [OPTIONS] [-- <ARGS>...]
+gwe -e [WORKTREE] [OPTIONS] [-- <ARGS>...]
+gwe -c [WORKTREE] [OPTIONS] [-- <ARGS>...]
 ```
 
 **オプション (ToolCommand)**
 
 - `WORKTREE` (位置引数、オプション)  
-  ターゲット worktree 識別子。省略された場合、現在の worktree (`@`) を使用します。
+  ターゲット worktree 識別子。省略された場合、現在の worktree（`@`）が使用されます。
+
+- `-b, --branch <BRANCH>`  
+  新規ブランチ名。指定された場合、常に新規 worktree を作成します（既存 worktree の再利用はしません）。
+
+- `--track <REMOTE/BRANCH>`  
+  追跡する remote/branch。指定された場合、worktree 作成時に `git worktree add --track` が使用されます。ローカルブランチ名は `--branch` が指定されない限り `REMOTE/BRANCH` から推論されます。
+
+- `-x, --multiplier <COUNT>` (1-5)  
+  **ターミナル起動ツール（`claude`/`codex`/`gemini`）でのみ有効**。指定された場合、複数の worktree を作成し、分割ペインで起動します。
+  - `-b/--branch` が必須です。
+  - `WORKTREE` と同時には指定できません。
 
 - `-- <ARGS>...`  
   ツールに渡す追加引数。
 
-**挙動**
+**共通の解決/作成ルール（概要）**
 
-1. `gwe cd` と同じアルゴリズムを使用して worktree パスを解決します。
-2. 対応するツールを worktree パスを引数として起動します。
-3. `-- <ARGS>...` からの追加引数を渡します。
+- `-b/--branch` または `--track` が指定されている場合、常に新規 worktree 作成を試みます。
+- それ以外の場合、`WORKTREE`（省略時は `@`）を `gwe cd` 相当のルールで既存 worktree に解決し、解決できなければ `WORKTREE` を commitish として新規作成を試みます。
 
-**エラーハンドリング**
+**ツール別の起動**
 
-- ツールコマンドが失敗した場合、終了ステータスが報告されます。
+- `cursor` / `wind` / `anti`: worktree パスを引数として外部ツールを起動します。
+- `claude` / `codex` / `gemini`: 新しいターミナルで起動します。
+  - `gemini` は引数が指定され、かつ `-i/--prompt-interactive` または `-p/--prompt` が含まれていない場合、内部的に `-i` が自動付与されます。
+- `-e`: `gwe.defaultEditor` で設定されたツール名で起動します（未設定の場合は `cursor`）。
+- `-c`: `gwe.defaultCli` で設定されたツール名で起動します（未設定の場合はエラー）。
+- `cli`: `gwe.multiCli`（内部的には `gwe.multicli`）で設定されたツール一覧を分割ペインで起動します。
+  - `-b/--branch` が指定されている場合、ツール数ぶんの worktree を作成し、各ツールをそれぞれの worktree で起動します（最大 5）。
+  - `-b/--branch` が指定されていない場合、単一の worktree に対して複数ツールを起動します。
+
+**分割ペイン起動（`-x` および `gwe cli`）**
+
+- Windows: `wt.exe`（Windows Terminal）が利用できる場合は分割ペインを使用し、利用できない場合は複数のターミナルウィンドウを起動します。
+- macOS: iTerm2 が利用できる場合は分割ペインを使用し、利用できない場合は複数の Terminal.app ウィンドウを起動します。
 
 
 5. 設定
@@ -764,8 +793,20 @@ GWE は `gwe.*` 名前空間の git config 変数から設定を読み込みま�
 - `gwe.defaultbranch` (文字列)
   デフォルトのブランチ名。
 
+- `gwe.defaulteditor` (文字列)
+  `gwe -e` で起動するデフォルトエディタ名。
+
+- `gwe.defaultcli` (文字列)
+  `gwe -c` で起動するデフォルト CLI 名。
+
+- `gwe.multicli` (マルチバリュー文字列)
+  `gwe cli` で起動するツール一覧。値はカンマまたは空白で分割されます。
+
 - `gwe.copy.include` (マルチバリュー文字列)
   メイン worktree から新しい worktree にコピーするファイルの Glob パターン。各値が `glob_copy` フックを作成します。
+
+- `gwe.copy.exclude` (マルチバリュー文字列)
+  `gwe.copy.include` などでコピーする際に除外するファイルの Glob パターン。
 
 - `gwe.hook.postcreate` (マルチバリュー文字列)
   worktree 作成後に実行するシェルコマンド。各値が `command` フックを作成します。
@@ -951,12 +992,12 @@ GWE は `gwe.*` 名前空間の git config 変数から設定を読み込みま�
 - `Register-ArgumentCompleter` を介して登録される引数補完:
 
   - 最初の引数（サブコマンド）を補完する場合、以下を提案します:
-    `add`, `list`, `remove`, `cd`, `shell-init`。
-  - サブコマンドが `cd` の場合:
+    `add`, `list`, `rm`, `cd`, `init`, `shell-init`, `config`, `cursor`, `wind`, `anti`, `claude`, `codex`, `gemini`, `cli`, `-e`, `-c`。
+  - サブコマンドが `cd` / `rm` / ツール系（`cursor`/`wind`/`anti`/`claude`/`codex`/`gemini`/`cli`/`-e`/`-c`）の場合:
     - `gwe list --json` を呼び出します。
     - JSON を `.name` フィールドを持つオブジェクトにパースします。
     - 各 `name` を補完候補として提案します。
-    - `"@"` という名前を、PowerShell のパース問題を避けるために `'@'` とクォートして提案する特別扱いをします。
+    - `"@"` は PowerShell のパース問題を避けるために `'@'` とクォートして提案します（ただし `rm` の補完候補からは除外されます）。
 
 これらの挙動は `shell::pwsh` のユニットテストと `tests/shell_spec.rs` の統合テストによってアサートされています。
 
@@ -1080,7 +1121,7 @@ GWE は 4 つのバリアントを持つ構造化されたエラータイプ `Ap
   - ブランチの競合を検出し、明確なメッセージで報告します。
   - `--track` 引数の要件を強制します。
   - 作成後フックを実行し、その効果（コピーされたファイルやコマンド生成ファイル）を観察します。
-  - 作成後の Cursor 起動のための `--open` をサポートします。
+  - 成功時は解決された worktree のパスを標準出力に出力します。
 
 - **`cd` の挙動**  
   - `gwe cd @` はリポジトリルートに解決されます。
@@ -1094,10 +1135,10 @@ GWE は 4 つのバリアントを持つ構造化されたエラータイプ `Ap
   - `list --json` は `is_main` および `is_current` フラグを正しく反映します。
 
 - **`rm` の挙動**  
-  - `rm --with-branch --force-branch` は worktree ディレクトリとそのブランチの両方を削除します。
+  - `rm --with-branch` は worktree ディレクトリとそのブランチの両方を削除します（ブランチ削除は未マージでも強制されます）。
+  - `rm` は dirty な worktree でも強制的に削除します。
   - `rm` は現在設定されている `base_dir` 下の worktree にのみ影響します。`base_dir` を変更すると、既存の worktree が管理対象外となり、削除から保護される可能性があります。
   - 現在の worktree を削除しようとすると、明確なエラーで失敗し、ディレクトリはそのまま残ります。
-  - `--with-branch` なしの `--force-branch` は拒否されます。
 
 - **`config` の挙動**
   - `config set` / `config get` / `config unset` は正しく動作します。

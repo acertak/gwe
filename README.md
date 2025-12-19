@@ -6,7 +6,7 @@ Rust 製の Git worktree ヘルパーツールです。"gwe" は **Git Worktree 
 Git worktree を快適に扱うための CLI ツールです。Windows と macOS に対応しています。  
 For the English version of the README, see `README.en.md`.
 
-> Status: 1.1.0. 日常的な利用に十分な機能が揃っています。
+> Status: 1.2.0. 日常的な利用に十分な機能が揃っています。
 
 > **注意:**
 > v0.2.0 までは `wtp` (Git Worktree Pro) をベースにしていましたが、v0.3.0 からは `wtp` ベースを廃止し、完全なオリジナル実装となりました。これに伴い、コマンド名も `wtw` から `gwe` に変更されました。
@@ -19,7 +19,7 @@ For the English version of the README, see `README.en.md`.
   - 内部で `git` コマンドを使用します。
   - Windows スタイルのパスやドライブレター、Unix スタイルのパスをサポートします。
 - **自動的な worktree レイアウト**
-  - デフォルトで `feature/auth` のようなブランチ名を `../worktree/feature/auth` にマッピングします。
+  - デフォルトで `feature/auth` のようなブランチ名を `../worktree/<repo_name>/feature/auth` にマッピングします。
   - Windows で禁止されている文字をブランチ名に含む場合、安全な文字に置換します（例: `feat:bad*name` → `feat_bad_name`）。
 - **作成後のフック機能**
   - `copy` フック: `.env` などの gitignore されたファイルをメイン worktree からコピーします。
@@ -70,7 +70,7 @@ For the English version of the README, see `README.en.md`.
 ```powershell
 # 1. リポジトリの "Releases" ページから ZIP をダウンロード
 # 2. 任意の場所に解凍 (例: C:\tools\gwe)
-Expand-Archive -Path .\gwe-1.1.0-x86_64-pc-windows-msvc.zip -DestinationPath C:\tools\gwe
+Expand-Archive -Path .\gwe-1.2.0-x86_64-pc-windows-msvc.zip -DestinationPath C:\tools\gwe
 
 # 3. そのディレクトリを PATH に追加 (一度だけ)
 [System.Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\tools\gwe", "User")
@@ -85,7 +85,7 @@ gwe --help
 # 1. リポジトリの "Releases" ページから tar.gz をダウンロード
 # 2. 任意の場所に解凍 (例: ~/tools/gwe)
 mkdir -p ~/tools/gwe
-tar -xzf gwe-1.1.0-aarch64-apple-darwin.tar.gz -C ~/tools/gwe
+tar -xzf gwe-1.2.0-aarch64-apple-darwin.tar.gz -C ~/tools/gwe
 
 # 3. そのディレクトリを PATH に追加 (~/.zshrc または ~/.bashrc に追記)
 echo 'export PATH="$HOME/tools/gwe:$PATH"' >> ~/.zshrc
@@ -142,6 +142,8 @@ gwe --help
 ### 1. Git リポジトリの準備
 
 Git リポジトリ内で (または `--repo` で指定して)、`gwe` はリポジトリルートを自動検出します:
+
+まずは `gwe list --json` を実行して、リポジトリ検出（および `--repo` 指定）が正しく動作することを確認します。`list` は worktree を作成・削除せず一覧を取得するだけなので、最初の疎通確認として安全です（`--json` は出力が安定していて機械処理にも向いています）。
 
 #### Windows の場合
 
@@ -203,6 +205,7 @@ gwe cd <TAB>  # worktree 名が補完されます
   - 実際の `gwe` バイナリを呼び出す。
   - 最初の引数が `cd` でコマンドが成功した場合、カレントディレクトリを表示されたパスに変更する。
 - シェル補完を登録します (PowerShell の ArgumentCompleter, Bash/Zsh の complete 関数)。
+- （現在の実装）グローバル git config に `gwe.defaultEditor=cursor` と `gwe.defaultCli=claude` を自動設定します（変更したい場合は `gwe config set -g ...` を使用してください）。
 
 手動でプロファイルを管理したい場合は、スクリプトを出力して確認できます:
 
@@ -248,7 +251,7 @@ gwe claude -x 3 -b feature/parallel
   - `gwe -c` (`gwe config set gwe.defaultCli ...`で設定された CLI)
   - `gwe cli` (`gwe config set gwe.multiCli claude,codex` のようにカンマ区切りで複数の CLI を分割ペインで起動。`-b`指定時はツールごとに個別の worktree を作成)
 
-デフォルトでは、worktree はリポジトリルートからの相対パス `../worktree` 配下に配置されます。
+デフォルトでは、worktree はリポジトリルートからの相対パス `../worktree` 配下に作成され、さらにリポジトリ名が 1 階層目になります（例: `../worktree/my-project/feature/auth`）。
 
 ### worktree の一覧表示 (`list`)
 
@@ -260,7 +263,7 @@ gwe list
 # PATH                      BRANCH           HEAD     STATUS  UPSTREAM       ABS_PATH
 # ----                      ------           ----     ------  --------       --------
 # @*                        main             c72c7800 clean   origin/main    C:\src\my-project
-# feature/auth              feature/auth     def45678 dirty   origin/feature/auth C:\src\my-project\..\worktree\feature\auth
+# my-project\feature\auth   feature/auth     def45678 dirty   origin/feature/auth C:\src\my-project\..\worktree\my-project\feature\auth
 
 # ツールや補完用の JSON 出力
 gwe list --json
@@ -285,20 +288,15 @@ JSON 出力は概ね以下のようになります:
 ```
 
 
-### worktree の削除 (`remove`)
+### worktree の削除 (`rm`)
 
 ```powershell
 # worktree を削除 (表示名/ブランチ名/ディレクトリ名で指定)
-gwe remove feature/auth
+# dirty（未コミットの変更あり）でも強制的に削除されます。
+gwe rm feature/auth
 
-# worktree が dirty でも強制削除
-gwe remove --force feature/auth
-
-# worktree とそのブランチを削除 (マージ済みの場合のみ)
-gwe remove --with-branch feature/auth
-
-# worktree を削除し、ブランチも強制削除
-gwe remove --with-branch --force-branch feature/auth
+# worktree とそのブランチを一緒に削除 (未マージでも強制的に削除されます)
+gwe rm -b feature/auth
 ```
 
 `base_dir` 管理下の worktree のみが削除対象です。それ以外は変更されません。
@@ -429,14 +427,11 @@ gwe cd @
 # メイン worktree に移動してから削除
 gwe cd @
 
-# worktree のみ削除（ブランチは残す）
+# worktree のみ削除（ブランチは残す。dirty でも削除されます）
 gwe rm feature/awesome-feature
 
-# worktree とブランチを一緒に削除
+# worktree とブランチを一緒に削除 (未マージでも削除されます)
 gwe rm -b feature/awesome-feature
-
-# マージされていないブランチも強制削除
-gwe rm -b --force-branch feature/abandoned-feature
 ```
 
 ### プロジェクト初期設定（推奨）
@@ -462,7 +457,7 @@ gwe config set gwe.defaultCli "claude"
 # 特定のコミットから hotfix ブランチを作成
 gwe cursor abc1234 -b hotfix/critical-bug
 
-# 作業が終わったら削除
+# 作業が終わったら削除 (ブランチも削除)
 gwe cd @
 gwe rm -b hotfix/critical-bug
 ```
@@ -496,8 +491,9 @@ gwe rm -b hotfix/critical-bug
 | `gwe.defaultBranch` | デフォルトブランチ | `main` |
 | `gwe.defaultEditor` | デフォルトエディタ (`-e`) | `cursor` |
 | `gwe.defaultCli` | デフォルト CLI ツール (`-c`) | `claude` |
-| `gwe.multiCli` | `gwe cli` で起動するツール一覧 | `claude` |
+| `gwe.multiCli` | `gwe cli` で起動するツール一覧 | `claude, codex, gemini` |
 | `gwe.copy.include` | コピーするファイルパターン | `*.env` |
+| `gwe.copy.exclude` | 除外するファイルパターン | `node_modules/**` |
 | `gwe.hook.postcreate` | 作成後に実行するコマンド | `npm ci` |
 
 

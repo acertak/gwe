@@ -17,7 +17,7 @@ impl TestRepo {
     /// Create a new repository with an initial commit.
     pub fn new() -> Self {
         let temp = TempDir::new().expect("create temp dir");
-        run_git(temp.path(), &["init", "-q"]);
+        run_git(temp.path(), &["init", "-b", "main", "-q"]);
         run_git(temp.path(), &["config", "user.name", "gwe-test"]);
         run_git(temp.path(), &["config", "user.email", "gwe@example.com"]);
 
@@ -73,6 +73,10 @@ impl TestRepo {
 
     pub fn create_branch(&self, name: &str) {
         self.git(&["branch", name]);
+    }
+
+    pub fn run_in_worktree(&self, dir: &Path, args: &[&str]) {
+        run_git(dir, args);
     }
 
     pub fn worktree_path_for(&self, name: &str) -> PathBuf {

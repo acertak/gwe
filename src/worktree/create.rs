@@ -40,8 +40,8 @@ pub fn ensure_worktree(
     // しかし ToolCommand から target が None の場合 (@) は作成しないので、
     // 既存解決を優先する。
 
-    // -b が指定されている場合は常に新規作成を試みる
-    if cmd.branch.is_some() {
+    // -b または --track が指定されている場合は常に新規作成を試みる
+    if cmd.branch.is_some() || cmd.track.is_some() {
         return create_new_worktree(repo, git, config, cmd, &existing);
     }
 

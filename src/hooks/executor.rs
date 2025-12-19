@@ -92,7 +92,7 @@ impl<'a> HookExecutor<'a> {
         )?;
 
         if metadata.is_dir() {
-            copy_dir_recursive(&src_path, &dst_path)
+            self.copy_dir_recursive(&src_path, &dst_path)
         } else {
             fs::copy(&src_path, &dst_path)
                 .map(|_| ())
@@ -118,6 +118,10 @@ impl<'a> HookExecutor<'a> {
                         Ok(p) => p,
                         Err(_) => continue,
                     };
+
+                    if self.is_excluded(relative) {
+                        continue;
+                    }
                     
                     let dest = worktree_path.join(relative);
 
@@ -135,7 +139,7 @@ impl<'a> HookExecutor<'a> {
                     )?;
 
                     if path.is_dir() {
-                        copy_dir_recursive(&path, &dest)?;
+                        self.copy_dir_recursive(&path, &dest)?;
                     } else {
                         fs::copy(&path, &dest)
                             .with_context(|| format!("failed to copy file to {}", dest.display()))?;
@@ -144,6 +148,78 @@ impl<'a> HookExecutor<'a> {
                 Err(e) => warn!("Glob error: {}", e),
             }
         }
+        Ok(())
+    }
+
+    fn is_excluded(&self, relative_path: &Path) -> bool {
+        // .git ディレクトリは常に除外
+        for component in relative_path.components() {
+            if let std::path::Component::Normal(name) = component {
+                if name == ".git" {
+                    return true;
+                }
+            }
+        }
+
+        #[cfg(windows)]
+        let options = glob::MatchOptions {
+            case_sensitive: false,
+            ..Default::default()
+        };
+        #[cfg(not(windows))]
+        let options = glob::MatchOptions::default();
+
+        for exclude_pattern in &self.config.copy_exclude {
+            if let Ok(matcher) = glob::Pattern::new(exclude_pattern) {
+                // パス自体およびその親ディレクトリをすべてチェック
+                for ancestor in relative_path.ancestors() {
+                    let path_str = ancestor.to_string_lossy();
+                    if path_str.is_empty() || path_str == "." {
+                        continue;
+                    }
+
+                    // globマッチングのためにパス区切り文字を正規化 (Windows用)
+                    let normalized_path = path_str.replace('\\', "/");
+
+                    if matcher.matches_with(&normalized_path, options) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    fn copy_dir_recursive(&self, src: &Path, dst: &Path) -> Result<()> {
+        fs::create_dir_all(dst)
+            .with_context(|| format!("failed to create destination directory {}", dst.display()))?;
+
+        for entry in fs::read_dir(src).with_context(|| format!("failed to read {}", src.display()))? {
+            let entry = entry?;
+            let entry_src = entry.path();
+            let entry_dst = dst.join(entry.file_name());
+
+            let relative = match entry_src.strip_prefix(self.repo_root) {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
+
+            if self.is_excluded(relative) {
+                continue;
+            }
+
+            let file_type = entry.file_type()?;
+            if file_type.is_dir() {
+                self.copy_dir_recursive(&entry_src, &entry_dst)?;
+            } else {
+                if let Some(parent) = entry_dst.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::copy(&entry_src, &entry_dst)
+                    .with_context(|| format!("failed to copy file to {}", entry_dst.display()))?;
+            }
+        }
+
         Ok(())
     }
 
@@ -237,27 +313,4 @@ impl<'a> HookExecutor<'a> {
             .to_string_lossy()
             .to_string()
     }
-}
-
-fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
-    fs::create_dir_all(dst)
-        .with_context(|| format!("failed to create destination directory {}", dst.display()))?;
-
-    for entry in fs::read_dir(src).with_context(|| format!("failed to read {}", src.display()))? {
-        let entry = entry?;
-        let entry_src = entry.path();
-        let entry_dst = dst.join(entry.file_name());
-        let file_type = entry.file_type()?;
-        if file_type.is_dir() {
-            copy_dir_recursive(&entry_src, &entry_dst)?;
-        } else {
-            if let Some(parent) = entry_dst.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            fs::copy(&entry_src, &entry_dst)
-                .with_context(|| format!("failed to copy file to {}", entry_dst.display()))?;
-        }
-    }
-
-    Ok(())
 }

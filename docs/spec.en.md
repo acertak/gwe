@@ -58,7 +58,7 @@ tests in this repository. No speculative or planned behavior is described.
   - `"root"` (case‑insensitive alias for the main worktree).
   - The repository name (the last path component of the main root), case‑insensitive.
   - A branch name (e.g. `feature/auth`).
-  - A display name (e.g. `feature\auth` on Windows).
+  - A display name (e.g. `<repo_name>\feature\auth` on Windows).
   - The worktree directory name (final path component).
 
 
@@ -97,14 +97,14 @@ The crate is structured into modules corresponding to major responsibilities:
 - `worktree`  
   Implementation of subcommands operating on worktrees:
 
-  - `worktree::add`: `gwe add` behavior (worktree creation, path mapping,
+  - `worktree::create`: worktree creation/reuse (path mapping,
     conflict detection, post‑create hooks).
   - `worktree::list`: `gwe list` behavior (table and JSON output).
   - `worktree::rm`: `gwe rm` behavior (worktree and optional branch removal).
   - `worktree::resolve`: `gwe cd` behavior (name resolution).
   - `worktree::common`: cross‑cutting helpers for path normalization,
     display names, and "managed" checks.
-  - `worktree::tool`: `gwe cursor`, `gwe wind`, `gwe anti`, `gwe claude`, `gwe codex`, `gwe gemini`, and `gwe cli` behavior (external tool launch).
+  - `worktree::tool`: `gwe add`, `gwe cursor`, `gwe wind`, `gwe anti`, `gwe claude`, `gwe codex`, `gwe gemini`, `gwe -e`, `gwe -c`, and `gwe cli` behavior (external tool launch / terminal spawning).
 
 - `hooks`  
   The post‑create hooks executor (`HookExecutor`) which runs `copy`,
@@ -169,7 +169,7 @@ Global options (available before any subcommand):
 
 The `Command` enum defines the available subcommands:
 
-- `add` (`AddCommand`)
+- `add` (`ToolCommand`)
 - `list` (`ListCommand`)
 - `rm` (`RmCommand`)
 - `cd` (`CdCommand`)
@@ -182,6 +182,8 @@ The `Command` enum defines the available subcommands:
 - `claude` (`ToolCommand`)
 - `codex` (`ToolCommand`)
 - `gemini` (`ToolCommand`)
+- `-e` (`ToolCommand`) (launch default editor)
+- `-c` (`ToolCommand`) (launch default CLI)
 - `cli` (`ToolCommand`)
 
 Each subcommand is documented below.
@@ -191,21 +193,21 @@ Each subcommand is documented below.
 ^^^^^^^^^^^^^^^
 
 **Purpose**  
-Create a new Git worktree under the configured base directory, optionally
-creating or tracking a branch, run post‑create hooks, and optionally open the
+Create (or reuse) a Git worktree under the configured base directory. If a new
+worktree is created, post‑create hooks are executed. On success, prints the
+resolved absolute path of the worktree to standard output.
 **Synopsis**
 
 ```text
-gwe add [OPTIONS] [BRANCH_OR_COMMIT]
+gwe add [WORKTREE] [OPTIONS]
 ```
 
-**Options (AddCommand)**
+**Options (ToolCommand)**
 
-- `BRANCH_OR_COMMIT` (positional, optional)  
+- `WORKTREE` (positional, optional)  
   - If `--branch` is specified, this is treated as the starting point
-    (commitish) for the new branch and worktree.  
-  - Otherwise, this is required and is used directly as the commitish for the
-    worktree.
+    (commitish) for the new branch and worktree (optional).
+  - Otherwise, this is required and is used as a branch name or commitish.
 
 - `-b, --branch <BRANCH>`  
   Name of the new branch to create for the worktree. When provided:
@@ -219,9 +221,6 @@ gwe add [OPTIONS] [BRANCH_OR_COMMIT]
   passed as the commitish to `git worktree add`. The local branch name is
   inferred from the remote/branch string unless `--branch` is explicitly
   supplied.
-
-- `-o, --open`  
-  After creating the worktree, open it in Cursor editor.
 
 **Argument validation**
 
@@ -240,13 +239,13 @@ Behavior is determined from the combination of `--branch`, `--track`, and
 2. Else if `--branch` is supplied:
 
    - The branch name is taken from `--branch`.
-   - The commitish for `git worktree add` is taken from `BRANCH_OR_COMMIT`
+   - The commitish for `git worktree add` is taken from `WORKTREE`
      if present; otherwise it is `None`, and Git will use its own defaults
      for branch creation from the worktree root.
 
 3. Else (no `--track` and no `--branch`):
 
-   - `BRANCH_OR_COMMIT` is required. If it is missing or blank, the command
+   - `WORKTREE` is required. If it is missing or blank, the command
      fails with a user error: `"branch or commit is required"`.
    - The commitish is set to the provided value.
    - No new branch is created by GWE; `git worktree add` is invoked with only
@@ -339,7 +338,7 @@ These failures are treated as Git errors and mapped to exit code 3.
 
 **User‑visible output**
 
-On success, `gwe add` prints a single line to standard output:
+When a new worktree is created, GWE prints a progress line:
 
 ```text
 Created worktree '<display_name>' at <absolute_path>
@@ -352,8 +351,9 @@ If any hook fails, `gwe add` fails (the error is propagated and printed by
 `main`). Hook failures are treated as internal errors and mapped to exit code
 10.
 
-If `--open` is specified, the worktree is opened in Cursor after successful
-creation and hook execution.
+Finally, a successful `gwe add` prints the **normalized absolute path** of the
+resolved worktree as a single line. If an existing worktree is resolved, it
+prints only this single line (no creation message, no hooks).
 
 
 4.2.2 `gwe list`
@@ -460,7 +460,7 @@ When `--json` is provided, `gwe list` emits pretty‑printed JSON:
 
 Fields:
 
-- `name`: display name (e.g. `"@"`, `"feature\\auth"`).
+- `name`: display name (e.g. `"@"`, `"<repo_name>\\feature\\auth"`).
 - `branch`: optional branch name.
 - `head`: short commit hash (up to 8 characters).
 - `status`: `"clean"` or `"dirty"`.
@@ -490,22 +490,9 @@ gwe rm [OPTIONS] <WORKTREE>
   `gwe cd` (see section 4.2.4), except that the main worktree is never
   removable.
 
-- `-f, --force`  
-  Passes `--force` to `git worktree remove`, allowing removal of dirty
-  worktrees.
-
 - `-b, --with-branch`  
   After removing the worktree, also remove its local branch if one is
   associated.
-
-- `--force-branch` (alias: `--fb`)  
-  When used with `--with-branch`, pass `-D` instead of `-d` to `git branch`,
-  allowing the branch to be deleted even when not merged. If supplied without
-  `--with-branch`, the command fails with a user error:
-
-  ```text
-  --force-branch requires --with-branch
-  ```
 
 **Target resolution**
 
@@ -554,7 +541,7 @@ verified in tests.
 
 Worktree removal:
 
-- Arguments: `["worktree", "remove", (optional "--force"), <path>]`.
+- Arguments: `["worktree", "remove", "--force", <path>]` (always uses `--force`).
 - On success: the worktree directory is removed by Git.
 - On failure:
 
@@ -564,8 +551,7 @@ Worktree removal:
 
 Branch removal (when `--with-branch` and a branch is available):
 
-- Uses `git branch -d <branch>` or `git branch -D <branch>` depending on
-  `--force-branch`.
+- Uses `git branch -D <branch>` (forced; can delete unmerged branches).
 - On failure:
 
   - If stderr is non‑empty, it is used directly as the error message.
@@ -711,6 +697,12 @@ gwe init [--shell <SHELL>] [PROFILE_PATH]
 
 **Behavior**
 
+- (Current implementation) Attempts to set the following global git config
+  defaults (errors are ignored; existing values are overwritten):
+  - `gwe.defaultEditor = cursor`
+  - `gwe.defaultCli = claude`
+  - Prints a short hint to `stderr`.
+
 - For supported shells (`pwsh`, `bash`, `zsh`):
 
   - Ensures the profile directory exists, creating it if necessary.
@@ -778,8 +770,8 @@ Get, set, add, or unset Git configuration values. This is a wrapper around
 
 ```text
 gwe config get <KEY>
-gwe config set <KEY> <VALUE> [-g|--global]
-gwe config add <KEY> <VALUE> [-g|--global]
+gwe config set <KEY> <VALUE...> [-g|--global]
+gwe config add <KEY> <VALUE...> [-g|--global]
 gwe config unset <KEY> [-g|--global]
 ```
 
@@ -804,25 +796,32 @@ gwe config unset <KEY> [-g|--global]
 **Common configuration keys**
 
 - `gwe.defaultbranch`: Default branch name.
+- `gwe.defaulteditor`: Default editor to launch with `gwe -e` (defaults to `cursor` if unset).
+- `gwe.defaultcli`: Default CLI tool to launch with `gwe -c` (required for `gwe -c`).
+- `gwe.multicli`: List of tools to launch with `gwe cli` (comma- or whitespace-separated).
 - `gwe.copy.include`: Multi-value key for file patterns to copy (Glob copy hooks).
+- `gwe.copy.exclude`: Multi-value key for exclude patterns when copying (glob-style; `.git` is always excluded).
 - `gwe.hook.postcreate`: Multi-value key for commands to run (Command hooks).
 
 
-4.2.8 `gwe cursor` / `gwe wind` / `gwe anti` / `gwe claude` / `gwe codex` / `gwe gemini`
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+4.2.8 Tool launch (`gwe cursor` / `gwe wind` / `gwe anti` / `gwe claude` / `gwe codex` / `gwe gemini` / `gwe -e` / `gwe -c`)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 **Purpose**  
-Launch an external tool (Editor or AI CLI) in a worktree.
+Launch an external tool (editor or AI CLI) in a worktree. If the specified
+worktree does not exist, it will be created (and post-create hooks will run).
 
 **Synopsis**
 
 ```text
-gwe cursor [WORKTREE] [-- <ARGS>...]
-gwe wind [WORKTREE] [-- <ARGS>...]
-gwe anti [WORKTREE] [-- <ARGS>...]
-gwe claude [WORKTREE] [-- <ARGS>...]
-gwe codex [WORKTREE] [-- <ARGS>...]
-gwe gemini [WORKTREE] [-- <ARGS>...]
+gwe cursor [WORKTREE] [OPTIONS] [-- <ARGS>...]
+gwe wind [WORKTREE] [OPTIONS] [-- <ARGS>...]
+gwe anti [WORKTREE] [OPTIONS] [-- <ARGS>...]
+gwe claude [WORKTREE] [OPTIONS] [-- <ARGS>...]
+gwe codex [WORKTREE] [OPTIONS] [-- <ARGS>...]
+gwe gemini [WORKTREE] [OPTIONS] [-- <ARGS>...]
+gwe -e [WORKTREE] [OPTIONS] [-- <ARGS>...]
+gwe -c [WORKTREE] [OPTIONS] [-- <ARGS>...]
 ```
 
 **Options (ToolCommand)**
@@ -830,22 +829,41 @@ gwe gemini [WORKTREE] [-- <ARGS>...]
 - `WORKTREE` (positional, optional)  
   Target worktree identifier. If omitted, uses the current worktree (`@`).
 
-- `-x, --multiplier <COUNT>` (1-5)
-  Create multiple worktrees and open them in split panes (Windows Terminal or iTerm2).
+- `-b, --branch <BRANCH>`  
+  New branch name (always creates a new worktree when set).
+
+- `--track <REMOTE/BRANCH>`  
+  Remote branch to track when creating a worktree (`git worktree add --track`).
+  The local branch name is inferred from `REMOTE/BRANCH` unless `--branch` is
+  explicitly supplied.
+
+- `-x, --multiplier <COUNT>` (1-5)  
+  **Effective only for terminal tools** (`claude`/`codex`/`gemini`).
+  Creates multiple worktrees and launches them in split panes.
+  - Requires `-b/--branch`.
+  - Cannot be used together with `WORKTREE`.
 
 - `-- <ARGS>...`  
   Additional arguments to pass to the tool.
 
-**Behavior**
+**Resolution/creation (high level)**
 
-1. Resolves the worktree path using the same algorithm as `gwe cd`.
-2. Launches the corresponding tool with the worktree path as an argument.
-3. Passes any additional arguments from `-- <ARGS>...`.
-4. If `-x` is specified, creates multiple worktrees and opens them in split panes.
+- If `-b/--branch` or `--track` is specified, GWE always attempts to create a new worktree.
+- Otherwise, it resolves `WORKTREE` (or `@`) using the same rules as `gwe cd`;
+  if not found, it treats `WORKTREE` as a branch/commitish and attempts to create a new worktree.
 
-**Error handling**
+**Tool-specific behavior**
 
-- If the tool command fails, the exit status is reported.
+- `cursor` / `wind` / `anti`: launched as an external process with the worktree path as an argument.
+- `claude` / `codex` / `gemini`: spawned in a new terminal window.
+  - For `gemini`, if extra args are provided and neither `-i/--prompt-interactive` nor `-p/--prompt` is present, `-i` is automatically prepended.
+- `-e`: launches the tool configured in `gwe.defaultEditor` (defaults to `cursor` if unset).
+- `-c`: launches the tool configured in `gwe.defaultCli` (errors if unset).
+
+**Split panes**
+
+- Windows: uses Windows Terminal (`wt.exe`) when available; otherwise falls back to separate terminal windows.
+- macOS: uses iTerm2 split panes when available; otherwise falls back to multiple Terminal.app windows.
 
 
 4.2.9 `gwe cli`
@@ -866,10 +884,10 @@ Same as above.
 
 **Behavior**
 
-1. Resolves or creates the worktree path.
-   - If `-b/--branch` is specified, creates multiple worktrees (one for each tool in `gwe.multicli`) using the same naming convention as `multiplier` (-x).
+1. Reads the tool list from `gwe.multicli` (case-insensitive; often configured as `gwe.multiCli`).
+2. Resolves or creates the worktree path:
+   - If `-b/--branch` is specified, creates multiple worktrees (one per tool; max 5 for split panes), using the same naming convention as `-x` (`<branch>-1`, `<branch>-2`, ...).
    - Otherwise, uses a single worktree for all tools.
-2. Reads the list of tools from `gwe.multicli` configuration.
 3. Launches all tools in split panes (Windows Terminal or iTerm2) within their respective target worktrees.
 
 
@@ -892,9 +910,18 @@ Supported keys:
 - `gwe.defaultbranch` (string)
   Default branch name.
 
+- `gwe.defaulteditor` (string)
+  Default editor tool to launch via `gwe -e`.
+
+- `gwe.defaultcli` (string)
+  Default CLI tool to launch via `gwe -c`.
+
 - `gwe.copy.include` (multi-value string)
   Glob patterns for files to copy from the main worktree to new worktrees.
   Each value creates a `glob_copy` hook.
+
+- `gwe.copy.exclude` (multi-value string)
+  Exclude patterns applied when copying files (glob-style; `.git` is always excluded).
 
 - `gwe.hook.postcreate` (multi-value string)
   Shell commands to execute after worktree creation. Each value creates a
@@ -1105,13 +1132,13 @@ The PowerShell script emitted by `gwe shell-init pwsh` and appended by
 - An argument completer registered via `Register-ArgumentCompleter`:
 
   - When completing the first argument (the subcommand), suggests:
-    `add`, `list`, `remove`, `cd`, `shell-init`.
-  - When the subcommand is `cd`, it:
+    `add`, `list`, `rm`, `cd`, `init`, `shell-init`, `config`, `cursor`, `wind`, `anti`, `claude`, `codex`, `gemini`, `cli`, `-e`, `-c`.
+  - When the subcommand is `cd` / `rm` / tool commands (`cursor`/`wind`/`anti`/`claude`/`codex`/`gemini`/`cli`/`-e`/`-c`), it:
     - Invokes `gwe list --json`.
     - Parses the JSON into objects with a `.name` field.
     - Suggests each `name` as a completion candidate.
     - Special‑cases the `"@"` name by offering it quoted as `'@'` to avoid
-      PowerShell parsing issues.
+      PowerShell parsing issues (but excludes `"@"` for `rm`).
 
 These behaviors are asserted by unit tests in `shell::pwsh` and integration
 tests in `tests/shell_spec.rs`.
@@ -1245,7 +1272,7 @@ include:
   - Enforces `--track` argument requirements.
   - Runs post‑create hooks and observes their effects (copied files and
     command‑generated files).
-  - Supports `--open` to launch Cursor after creation.
+  - Prints the resolved worktree path to stdout on success.
 
 - **`cd` behavior**  
   - `gwe cd @` resolves to the repository root.
@@ -1262,14 +1289,14 @@ include:
   - `list --json` correctly reflects `is_main` and `is_current` flags.
 
 - **`rm` behavior**  
-  - `rm --with-branch --force-branch` deletes both the worktree directory
-    and its branch.
+  - `rm --with-branch` deletes both the worktree directory and its branch
+    (branch deletion is forced even if unmerged).
+  - `rm` removes worktrees even if they are dirty (force removal).
   - `rm` only affects worktrees under the currently configured `base_dir`;
     changing `base_dir` can make existing worktrees unmanaged and thus
     protected from removal.
   - Attempting to remove the current worktree fails with a clear error and
     leaves the directory intact.
-  - `--force-branch` without `--with-branch` is rejected.
 
 - **`config` behavior**
   - `config set` / `config get` / `config unset` work correctly.

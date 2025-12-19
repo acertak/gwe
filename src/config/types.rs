@@ -22,6 +22,8 @@ pub struct Config {
     pub default_cli: Option<String>,
     #[serde(default)]
     pub multi_cli: Vec<String>,
+    #[serde(default)]
+    pub copy_exclude: Vec<String>,
 }
 
 impl Default for Config {
@@ -34,6 +36,7 @@ impl Default for Config {
             default_editor: None,
             default_cli: None,
             multi_cli: Vec::new(),
+            copy_exclude: Vec::new(),
         }
     }
 }

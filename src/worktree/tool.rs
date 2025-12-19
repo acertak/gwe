@@ -6,8 +6,23 @@ use anyhow::{Result, anyhow};
 use crate::cli::ToolCommand;
 use crate::config::Config;
 use crate::git::rev::RepoContext;
+use crate::error::AppError;
 use crate::git::runner::GitRunner;
 use crate::worktree::create;
+
+pub fn run_add_command(
+    repo: &RepoContext,
+    git: &GitRunner,
+    config: &Config,
+    cmd: &ToolCommand,
+) -> Result<()> {
+    if cmd.target.is_none() && cmd.branch.is_none() && cmd.track.is_none() {
+        return Err(AppError::user("branch or commit is required").into());
+    }
+    let target_path = create::ensure_worktree(repo, git, config, cmd)?;
+    println!("{}", target_path.display());
+    Ok(())
+}
 
 pub fn run_tool_command(
     repo: &RepoContext,

@@ -37,7 +37,7 @@ function gwe {
 Register-ArgumentCompleter -Native -CommandName gwe -ScriptBlock {
     param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
 
-    $commands = @('add','list','remove','cd','shell-init','cursor','wind','anti','config')
+    $commands = @('add','list','rm','cd','init','shell-init','config','cursor','wind','anti','claude','codex','gemini','cli','-e','-c')
     $elements = @($commandAst.CommandElements | ForEach-Object { $_.Extent.Text })
 
     if ($elements.Count -lt 2) {
@@ -51,7 +51,7 @@ Register-ArgumentCompleter -Native -CommandName gwe -ScriptBlock {
 
     $subcommand = $elements[1]
 
-    if ($subcommand -eq 'cd' -or $subcommand -eq 'cursor' -or $subcommand -eq 'wind' -or $subcommand -eq 'anti') {
+    if ($subcommand -in @('cd','rm','cursor','wind','anti','claude','codex','gemini','cli','-e','-c')) {
         $exe = Get-GweExePath
         $json = & $exe list --json 2>$null
         if (-not $?) {
@@ -62,6 +62,11 @@ Register-ArgumentCompleter -Native -CommandName gwe -ScriptBlock {
         foreach ($item in $items) {
             $name = $item.name
             if (-not $name) { continue }
+
+            # rm はメイン worktree を削除できないため、候補から除外する
+            if ($subcommand -eq 'rm' -and ($item.is_main -eq $true -or $name -eq '@')) {
+                continue
+            }
 
             # PowerShell では @ は特殊トークンなので、補完時にはクォート付きで挿入する
             if ($name -eq '@') {

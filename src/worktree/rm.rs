@@ -27,10 +27,6 @@ pub fn run(
         .map_err(anyhow::Error::from)?
         .to_string();
 
-    if cmd.force_branch && !cmd.with_branch {
-        return Err(AppError::user("--force-branch requires --with-branch").into());
-    }
-
     let worktrees = list_worktrees(git)?;
     let base_dir = config.resolved_base_dir(repo.main_root());
 
@@ -50,7 +46,7 @@ pub fn run(
     }
 
     let display_path = common::normalize_path(&target_info.path);
-    remove_worktree(git, &target_info.path, cmd.force).map_err(anyhow::Error::from)?;
+    remove_worktree(git, &target_info.path, true).map_err(anyhow::Error::from)?;
 
     let mut stdout = io::stdout().lock();
     writeln!(
@@ -62,7 +58,7 @@ pub fn run(
 
     if cmd.with_branch {
         if let Some(branch) = &target_info.branch {
-            remove_branch(git, branch, cmd.force_branch).map_err(anyhow::Error::from)?;
+            remove_branch(git, branch, true).map_err(anyhow::Error::from)?;
             writeln!(stdout, "Removed branch '{}'", branch)?;
         }
     }

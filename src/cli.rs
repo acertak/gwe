@@ -43,6 +43,8 @@ pub enum Command {
     ShellInit(ShellInitCommand),
     /// 設定の確認・変更
     Config(ConfigCommand),
+    /// worktree を追加 (ツールを起動せずに作成のみ)
+    Add(ToolCommand),
     /// Cursor を起動
     Cursor(ToolCommand),
     /// Windsurf を起動
@@ -136,15 +138,9 @@ pub struct RmCommand {
     /// 削除対象の worktree
     #[arg(value_name = "WORKTREE")]
     pub target: Option<String>,
-    /// 強制削除
-    #[arg(short = 'f', long = "force")]
-    pub force: bool,
     /// 対応ブランチも削除
     #[arg(short = 'b', long = "with-branch")]
     pub with_branch: bool,
-    /// ブランチが別の worktree にチェックアウトされていても削除
-    #[arg(long = "force-branch", visible_alias = "fb")]
-    pub force_branch: bool,
 }
 
 #[derive(Args, Debug, Clone)]

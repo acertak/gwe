@@ -6,7 +6,7 @@ Git worktree helper written in Rust. "gwe" stands for **Git Worktree Extension**
 CLI tool to make Git worktree comfortable. Supports Windows and macOS.  
 See `README.md` for the Japanese version.
 
-> Status: 1.1.0. The CLI is ready for daily use.
+> Status: 1.2.0. The CLI is ready for daily use.
 
 > **Notice:**
 > Until v0.2.0, this tool was based on `wtp` (Git Worktree Pro). Since v0.3.0, it has been rewritten as an original implementation, and the command name has been changed from `wtw` to `gwe`.
@@ -19,7 +19,7 @@ Features
   - Uses the `git` command under the hood.
   - Supports Windows‑style paths and drive letters, as well as Unix‑style paths.
 - **Automatic worktree layout**
-  - Branch names like `feature/auth` are mapped to `../worktree/feature/auth` by default.
+  - Branch names like `feature/auth` are mapped to `../worktree/<repo_name>/feature/auth` by default.
   - Windows‑forbidden characters in branch names are sanitized (e.g. `feat:bad*name` → `feat_bad_name`).
 - **Post‑create hooks**
   - `copy` hooks to copy files (even gitignored ones like `.env`) from the main worktree.
@@ -70,7 +70,7 @@ Each archive should contain:
 ```powershell
 # 1. Download the ZIP from this repository's "Releases" page
 # 2. Extract it somewhere, for example:
-Expand-Archive -Path .\gwe-1.1.0-x86_64-pc-windows-msvc.zip -DestinationPath C:\tools\gwe
+Expand-Archive -Path .\gwe-1.2.0-x86_64-pc-windows-msvc.zip -DestinationPath C:\tools\gwe
 
 # 3. Add that directory to your PATH (once)
 [System.Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\tools\gwe", "User")
@@ -85,7 +85,7 @@ gwe --help
 # 1. Download the tar.gz from this repository's "Releases" page
 # 2. Extract it somewhere, for example:
 mkdir -p ~/tools/gwe
-tar -xzf gwe-1.1.0-aarch64-apple-darwin.tar.gz -C ~/tools/gwe
+tar -xzf gwe-1.2.0-aarch64-apple-darwin.tar.gz -C ~/tools/gwe
 
 # 3. Add that directory to your PATH (add to ~/.zshrc or ~/.bashrc)
 echo 'export PATH="$HOME/tools/gwe:$PATH"' >> ~/.zshrc
@@ -142,6 +142,8 @@ Quick Start
 ### 1. Prepare a Git repository
 
 Inside a Git repository (or with `--repo` pointing to one), `gwe` auto‑detects the repo root:
+
+Start by running `gwe list --json` to confirm repo detection (including `--repo`) works. `list` only reads and prints the current worktree state (it does not create/delete anything), so it’s a safe first smoke test (`--json` also provides stable, machine‑friendly output).
 
 #### Windows
 
@@ -203,6 +205,7 @@ What this does:
   - Calls the real `gwe` binary.
   - If the first argument is `cd` and the command succeeds, changes the current directory to the printed path.
 - Registers shell completion (ArgumentCompleter in PowerShell, complete function in Bash/Zsh).
+- (Current implementation) Automatically sets global git config defaults: `gwe.defaultEditor=cursor` and `gwe.defaultCli=claude` (you can change them later via `gwe config set -g ...`).
 
 If you prefer to manage your profile manually, you can also emit the script and inspect it:
 
@@ -246,8 +249,9 @@ gwe claude -x 3 -b feature/parallel
 - **Generic**:
   - `gwe -e` (Uses `gwe.defaultEditor`)
   - `gwe -c` (Uses `gwe.defaultCli`)
+  - `gwe cli` (Launch multiple CLIs configured in `gwe.multiCli` in split panes; with `-b` it creates one worktree per tool)
 
-By default, worktrees are placed under `../worktree` relative to the repo root.
+By default, worktrees are placed under `../worktree` relative to the repo root, with the repository name as the first path component (e.g. `../worktree/my-project/feature/auth`).
 
 
 ### List worktrees (`list`)
@@ -260,7 +264,7 @@ gwe list
 # PATH                      BRANCH           HEAD     STATUS  UPSTREAM       ABS_PATH
 # ----                      ------           ----     ------  --------       --------
 # @*                        main             c72c7800 clean   origin/main    C:\src\my-project
-# feature/auth              feature/auth     def45678 dirty   origin/feature/auth C:\src\my-project\..\worktree\feature\auth
+# my-project\feature\auth   feature/auth     def45678 dirty   origin/feature/auth C:\src\my-project\..\worktree\my-project\feature\auth
 
 # JSON for tooling or completion
 gwe list --json
@@ -285,20 +289,15 @@ The JSON output roughly looks like this:
 ```
 
 
-### Remove a worktree (`remove`)
+### Remove a worktree (`rm`)
 
 ```powershell
 # Remove a worktree (by display name/branch/directory)
-gwe remove feature/auth
+# It will be forcefully removed even if the worktree is dirty.
+gwe rm feature/auth
 
-# Force removal even if the worktree is dirty
-gwe remove --force feature/auth
-
-# Remove worktree and its branch (only if merged)
-gwe remove --with-branch feature/auth
-
-# Remove worktree and force-delete the branch
-gwe remove --with-branch --force-branch feature/auth
+# Remove worktree and its branch (forcefully removed even if unmerged)
+gwe rm -b feature/auth
 ```
 
 Only worktrees managed under `base_dir` are removed; others are left untouched.
@@ -426,14 +425,11 @@ gwe cd @
 # Move to main worktree first
 gwe cd @
 
-# Remove worktree only (keep the branch)
+# Remove worktree only (keep the branch. removed even if dirty)
 gwe rm feature/awesome-feature
 
-# Remove worktree and branch together
+# Remove worktree and branch together (removed even if unmerged)
 gwe rm -b feature/awesome-feature
-
-# Force delete even unmerged branches
-gwe rm -b --force-branch feature/abandoned-feature
 ```
 
 ### Recommended project setup
@@ -494,6 +490,7 @@ Command Reference
 | `gwe.defaultEditor` | Default editor (`-e`) | `cursor` |
 | `gwe.defaultCli` | Default CLI tool (`-c`) | `claude` |
 | `gwe.copy.include` | File patterns to copy | `*.env` |
+| `gwe.copy.exclude` | File patterns to exclude from copy | `node_modules/**` |
 | `gwe.hook.postcreate` | Command to run after creation | `npm ci` |
 
 

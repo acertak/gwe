@@ -46,6 +46,12 @@ pub fn run() -> Result<ExitCode> {
             let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
             shell::config::run(&repo, cmd)?;
         }
+        cli::Command::Add(cmd) => {
+            let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
+            let config = config::load_config(&repo)?;
+            let git = git::GitRunner::new(repo.clone());
+            worktree::tool::run_add_command(&repo, &git, &config, &cmd)?;
+        }
         cli::Command::Cursor(cmd) => {
             let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
             let config = config::load_config(&repo)?;
