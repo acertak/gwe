@@ -180,7 +180,15 @@ gwe init --shell pwsh
 
 # Open a new PowerShell and try
 gwe cd @
-gwe cd <TAB>  # completes worktree names
+gwe cd <TAB>  # shows candidates (matches name/branch/relative path)
+```
+
+```powershell
+# Check installation
+gwe init --check
+
+# Uninstall
+gwe init --uninstall
 ```
 
 #### macOS (Zsh / Bash)
@@ -194,17 +202,18 @@ gwe init --shell bash
 
 # Open a new terminal and try
 gwe cd @
-gwe cd <TAB>  # completes worktree names
+gwe cd <TAB>  # shows candidates (matches name/branch/relative path; Bash inserts name only and shows relative paths when listing)
 ```
 
 What this does:
 
 - Creates the profile directory/file if needed.
-- Appends a section starting with `# gwe shell integration`.
+- Appends a section wrapped in `# gwe shell integration (begin/end)`.
 - Defines a `gwe` function that:
   - Calls the real `gwe` binary.
   - If the first argument is `cd` and the command succeeds, changes the current directory to the printed path.
 - Registers shell completion (ArgumentCompleter in PowerShell, complete function in Bash/Zsh).
+- Tab completion filters by partial match against name/branch/abs_path (displayed path is relative to the repo root; Bash inserts name only and shows relative paths when listing).
 - (Current implementation) Automatically sets global git config defaults: `gwe.defaultEditor=cursor` and `gwe.defaultCli=claude` (you can change them later via `gwe config set -g ...`).
 
 If you prefer to manage your profile manually, you can also emit the script and inspect it:
@@ -266,8 +275,11 @@ gwe list
 # @*                        main             c72c7800 clean   origin/main    C:\src\my-project
 # my-project\feature\auth   feature/auth     def45678 dirty   origin/feature/auth C:\src\my-project\..\worktree\my-project\feature\auth
 
-# JSON for tooling or completion
+# JSON for tooling
 gwe list --json
+
+# TSV for completion (name/branch/abs_path)
+gwe list --completion
 ```
 
 The JSON output roughly looks like this:
@@ -315,7 +327,15 @@ gwe cd feature/auth
 # Change back to the main worktree
 gwe cd @
 gwe cd my-project   # repo name also works
+
+# Interactive selection (no args)
+gwe cd
+
+# Jump back to previous worktree
+gwe cd -
 ```
+
+The interactive list displays paths relative to the repository root.
 
 If `gwe` cannot find the requested worktree, it prints a helpful error with a list of available names and suggests running `gwe list`.
 
@@ -327,6 +347,12 @@ Manage `gwe` (and `git`) configuration values directly.
 ```powershell
 # Get a value
 gwe config get gwe.worktrees.dir
+
+# List configuration
+gwe config list
+
+# Diagnose configuration
+gwe config doctor
 
 # Set a value
 gwe config set gwe.worktrees.dir "../worktree"

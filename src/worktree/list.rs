@@ -14,6 +14,7 @@ use crate::worktree::common;
 #[derive(Debug, Clone, Copy)]
 pub struct ListOptions {
     pub json: bool,
+    pub completion: bool,
 }
 
 pub fn run(
@@ -24,8 +25,13 @@ pub fn run(
 ) -> Result<()> {
     let worktrees = list_worktrees(git)?;
     let base_dir = common::normalize_path(&config.resolved_base_dir(repo.main_root()));
-    let current_worktree = common::normalize_path(repo.worktree_root());
 
+    if options.completion {
+        output_completion(&worktrees, &base_dir)?;
+        return Ok(());
+    }
+
+    let current_worktree = common::normalize_path(repo.worktree_root());
     let rows = build_rows(&worktrees, git, &base_dir, &current_worktree)?;
 
     if options.json {
@@ -192,6 +198,27 @@ fn output_json(rows: &[DisplayRow]) -> Result<()> {
     let json = serde_json::to_string_pretty(&json_entries).context("failed to serialize JSON")?;
     stdout.write_all(json.as_bytes())?;
     stdout.write_all(b"\n")?;
+    Ok(())
+}
+
+fn output_completion(worktrees: &[WorktreeInfo], base_dir: &Path) -> Result<()> {
+    let mut stdout = io::stdout().lock();
+
+    for info in worktrees {
+        if !info.is_main && !common::is_managed(info, base_dir) {
+            continue;
+        }
+        let name = common::display_name(info, base_dir);
+        let branch = info
+            .branch
+            .clone()
+            .unwrap_or_else(|| "detached".to_string());
+        let abs_path = common::normalize_path(&info.path)
+            .to_string_lossy()
+            .to_string();
+        writeln!(stdout, "{}\t{}\t{}", name, branch, abs_path)?;
+    }
+
     Ok(())
 }
 

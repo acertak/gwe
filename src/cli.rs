@@ -98,6 +98,10 @@ pub struct ConfigCommand {
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum ConfigAction {
+    /// 設定値を一覧表示
+    List,
+    /// 設定の診断
+    Doctor,
     /// 設定値を取得
     Get {
         key: String,
@@ -131,6 +135,9 @@ pub struct ListCommand {
     /// JSON 形式で出力
     #[arg(long = "json")]
     pub json: bool,
+    /// 補完用の TSV 形式で出力（name/branch/abs_path）
+    #[arg(long = "completion", conflicts_with = "json")]
+    pub completion: bool,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -165,6 +172,12 @@ pub struct InitCommand {
     /// シェルのプロファイルファイルパス（例: $PROFILE）。省略時は既定の PowerShell プロファイルを使用
     #[arg(value_name = "PROFILE_PATH")]
     pub profile: Option<PathBuf>,
+    /// シェル統合がインストール済みか確認する
+    #[arg(long = "check", conflicts_with = "uninstall")]
+    pub check: bool,
+    /// シェル統合をアンインストールする
+    #[arg(long = "uninstall", conflicts_with = "check")]
+    pub uninstall: bool,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]

@@ -23,33 +23,219 @@ pub fn run(
     Ok(())
 }
 
+fn render_relative_path(path: &Path, repo_root: &Path) -> String {
+    let relative = relative_path(repo_root, path);
+    relative.to_string_lossy().to_string()
+}
+
+fn relative_path(base: &Path, target: &Path) -> PathBuf {
+    let base = common::normalize_path(base);
+    let target = common::normalize_path(target);
+
+    let base_components: Vec<_> = base.components().collect();
+    let target_components: Vec<_> = target.components().collect();
+    let mut common_len = 0;
+
+    for (left, right) in base_components.iter().zip(target_components.iter()) {
+        if left == right {
+            common_len += 1;
+        } else {
+            break;
+        }
+    }
+
+    if common_len == 0 {
+        return target;
+    }
+
+    let mut relative = PathBuf::new();
+    for _ in common_len..base_components.len() {
+        relative.push("..");
+    }
+    for component in target_components.iter().skip(common_len) {
+        relative.push(component.as_os_str());
+    }
+
+    if relative.as_os_str().is_empty() {
+        relative.push(".");
+    }
+
+    relative
+}
+
+#[derive(Debug)]
+struct SelectionItem {
+    name: String,
+    branch: String,
+    abs_path: PathBuf,
+    is_current: bool,
+}
+
 pub fn resolve_worktree_path(
     repo: &RepoContext,
     git: &GitRunner,
     config: &Config,
     target: Option<String>,
 ) -> Result<PathBuf> {
-    let target = target
-        .ok_or_else(|| AppError::user("worktree name is required"))
-        .map_err(anyhow::Error::from)?;
-    let target = sanitize_target(&target);
+    let worktrees = list_worktrees(git)?;
+    let base_dir = common::normalize_path(&config.resolved_base_dir(repo.main_root()));
+    let repo_name = repo.repo_name().to_string();
+    let current_worktree = common::normalize_path(repo.worktree_root());
+    let repo_root = common::normalize_path(repo.main_root());
+
+    let raw_target = match target {
+        Some(value) => value,
+        None => select_worktree(&worktrees, &base_dir, &current_worktree, &repo_root)?,
+    };
+
+    let mut target = sanitize_target(&raw_target);
     if target.is_empty() {
         return Err(AppError::user("worktree name is required").into());
     }
 
-    let worktrees = list_worktrees(git)?;
-    let base_dir = common::normalize_path(&config.resolved_base_dir(repo.main_root()));
-    let repo_name = repo.repo_name().to_string();
+    if target == "-" {
+        target = load_last_worktree(git)?;
+    }
 
     let resolved = resolve_path(&worktrees, &base_dir, &repo_name, &target)
         .ok_or_else(|| worktree_not_found(&target, &worktrees, &base_dir, &repo_name))
         .map_err(anyhow::Error::from)?;
+
+    store_last_worktree(git, &worktrees, &base_dir, &current_worktree);
 
     Ok(common::normalize_path(&resolved))
 }
 
 fn sanitize_target(target: &str) -> String {
     target.trim().trim_end_matches('*').to_string()
+}
+
+fn select_worktree(
+    worktrees: &[WorktreeInfo],
+    base_dir: &Path,
+    current_worktree: &Path,
+    repo_root: &Path,
+) -> Result<String> {
+    let items = build_selection_items(worktrees, base_dir, current_worktree);
+    if items.is_empty() {
+        return Err(AppError::user("no available worktrees").into());
+    }
+
+    let mut name_width = "PATH".len();
+    let mut branch_width = "BRANCH".len();
+    let mut rendered_names = Vec::with_capacity(items.len());
+
+    for item in &items {
+        let mut name = item.name.clone();
+        if item.is_current {
+            name.push('*');
+        }
+        name_width = name_width.max(name.len());
+        branch_width = branch_width.max(item.branch.len());
+        rendered_names.push(name);
+    }
+
+    let mut stderr = io::stderr().lock();
+    writeln!(stderr, "Select worktree:")?;
+    for (idx, item) in items.iter().enumerate() {
+        let name = &rendered_names[idx];
+        let display_path = render_relative_path(&item.abs_path, repo_root);
+        writeln!(
+            stderr,
+            "  {:>2}) {:<name_width$} {:<branch_width$} {}",
+            idx + 1,
+            name,
+            item.branch,
+            display_path,
+        )?;
+    }
+    write!(stderr, "> ")?;
+    stderr.flush()?;
+
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .map_err(AppError::internal_from)?;
+
+    let input = input.trim();
+    if input.is_empty() {
+        return Err(AppError::user("worktree selection cancelled").into());
+    }
+
+    if let Ok(index) = input.parse::<usize>() {
+        if index == 0 || index > items.len() {
+            return Err(AppError::user("invalid selection").into());
+        }
+        return Ok(items[index - 1].name.clone());
+    }
+
+    Ok(input.to_string())
+}
+
+fn build_selection_items(
+    worktrees: &[WorktreeInfo],
+    base_dir: &Path,
+    current_worktree: &Path,
+) -> Vec<SelectionItem> {
+    let mut items = Vec::new();
+
+    for info in worktrees {
+        if !info.is_main && !common::is_managed(info, base_dir) {
+            continue;
+        }
+
+        let abs_path = common::normalize_path(&info.path);
+        let is_current = abs_path == current_worktree;
+        let name = common::display_name(info, base_dir);
+        let branch = info
+            .branch
+            .clone()
+            .unwrap_or_else(|| "detached".to_string());
+
+        items.push(SelectionItem {
+            name,
+            branch,
+            abs_path,
+            is_current,
+        });
+    }
+
+    items.sort_by(|a, b| a.name.cmp(&b.name));
+    items
+}
+
+fn load_last_worktree(git: &GitRunner) -> Result<String> {
+    match git.run(["config", "--get", "gwe.lastWorktree"]) {
+        Ok(output) => {
+            let value = output.stdout().trim();
+            if value.is_empty() {
+                Err(AppError::user("previous worktree not found").into())
+            } else {
+                Ok(value.to_string())
+            }
+        }
+        Err(_) => Err(AppError::user("previous worktree not found").into()),
+    }
+}
+
+fn store_last_worktree(
+    git: &GitRunner,
+    worktrees: &[WorktreeInfo],
+    base_dir: &Path,
+    current_worktree: &Path,
+) {
+    let name = worktrees.iter().find_map(|info| {
+        let abs_path = common::normalize_path(&info.path);
+        if abs_path == current_worktree {
+            Some(common::display_name(info, base_dir))
+        } else {
+            None
+        }
+    });
+
+    if let Some(value) = name {
+        let _ = git.run(["config", "gwe.lastWorktree", &value]);
+    }
 }
 
 fn resolve_path(

@@ -366,17 +366,21 @@ human‑readable table or as JSON suitable for tooling and completion.
 **Synopsis**
 
 ```text
-gwe list [--json]
+gwe list [--json | --completion]
 ```
 
 **Options (ListCommand)**
 
 - `--json`  
   Output JSON instead of a formatted table.
+- `--completion`  
+  Output a TSV stream for shell completion (`name<TAB>branch<TAB>abs_path`).
+  This mode avoids expensive status/upstream lookups.
 
 **Data collection**
 
-`gwe list` performs the following steps:
+`gwe list` performs the following steps (except `--completion`, which uses a
+lightweight subset described below):
 
 1. Calls `git worktree list --porcelain` via `GitRunner`.
 2. Parses the output into `WorktreeInfo` entries. Each entry contains:
@@ -467,8 +471,20 @@ Fields:
 - `upstream`: optional upstream reference string.
 - `path`: same as `name` (logical path).
 - `abs_path`: absolute filesystem path.
-- `is_main`: whether this is the main worktree.
-- `is_current`: whether this is the current worktree.
+
+**Completion output (`--completion`)**
+
+When `--completion` is provided, `gwe list` emits a TSV stream:
+
+```text
+<name>\t<branch>\t<abs_path>
+```
+
+Rules:
+
+- Only the main worktree and worktrees under `base_dir` are listed.
+- `branch` is `"detached"` when no branch is attached.
+- No status/upstream checks are performed.
 
 
 4.2.3 `gwe rm`
@@ -585,14 +601,14 @@ shell integration, this enables shell‑level directory changes.
 **Synopsis**
 
 ```text
-gwe cd <WORKTREE>
+gwe cd [WORKTREE]
 ```
 
 **Options (CdCommand)**
 
-- `WORKTREE` (positional, required)  
-  Target worktree identifier. If missing or resolves to an empty name, the
-  command fails with a user error:
+- `WORKTREE` (positional, optional)  
+  Target worktree identifier. If missing, GWE enters an interactive selection
+  mode. If the sanitized value is empty, the command fails with a user error:
 
   ```text
   worktree name is required
@@ -608,6 +624,22 @@ The input is first sanitized by:
 
 If the sanitized value is empty, the command fails with the error above.
 
+**Interactive selection (no args)**
+
+When `WORKTREE` is omitted, GWE prints a numbered list to `stderr` with:
+
+- `name` (display name, `@` for main)
+- `branch` (or `detached`)
+- `abs_path` displayed as a path relative to the repository root
+
+It then prompts the user to select an index or type a name. Empty input
+returns a user error (`worktree selection cancelled`).
+
+**Previous worktree (`-`)**
+
+If `WORKTREE` is `-`, GWE resolves `gwe.lastWorktree` from git config. If
+missing, it fails with `previous worktree not found`.
+
 **Resolution algorithm**
 
 `gwe cd`:
@@ -617,7 +649,8 @@ If the sanitized value is empty, the command fails with the error above.
    - `base_dir` as `config.resolved_base_dir(main_root)`, and
    - `repo_name` from the main root directory name.
 
-3. For each worktree, in order:
+3. If the target is `-`, loads `gwe.lastWorktree` and uses that value.
+4. For each worktree, in order:
 
    - If it is the main worktree (`is_main == true`):
 
@@ -637,7 +670,7 @@ If the sanitized value is empty, the command fails with the error above.
        - The display name, or
        - The worktree directory name (final path component).
 
-4. If no match is found, a user error is returned with a message of the form:
+5. If no match is found, a user error is returned with a message of the form:
 
 ```text
 worktree '<target>' not found
@@ -651,8 +684,11 @@ the repository name, and the display names of managed worktrees.
 **Output**
 
 On success, `gwe cd` prints the normalized absolute path of the resolved
-worktree to standard output, followed by a newline. No other output is
-emitted in the success path.
+worktree to standard output, followed by a newline. Interactive prompts and
+lists are emitted to `stderr` only.
+
+After a successful resolution, GWE stores the **current** worktree display
+name to `gwe.lastWorktree` (best effort).
 
 Integration tests assert that:
 
@@ -672,7 +708,7 @@ for `gwe`.
 **Synopsis**
 
 ```text
-gwe init [--shell <SHELL>] [PROFILE_PATH]
+gwe init [--shell <SHELL>] [PROFILE_PATH] [--check | --uninstall]
 ```
 
 **Options (InitCommand)**
@@ -697,22 +733,35 @@ gwe init [--shell <SHELL>] [PROFILE_PATH]
 
 **Behavior**
 
-- (Current implementation) Attempts to set the following global git config
-  defaults (errors are ignored; existing values are overwritten):
-  - `gwe.defaultEditor = cursor`
-  - `gwe.defaultCli = claude`
-  - Prints a short hint to `stderr`.
+- `--check`:
+  - If the profile contains the shell integration markers, prints a success
+    message and exits with status 0.
+  - Otherwise, returns a user error with a message indicating the integration
+    is not installed.
 
-- For supported shells (`pwsh`, `bash`, `zsh`):
+- `--uninstall`:
+  - Removes the marked shell integration block from the profile file.
+  - If nothing is removed, prints a "not found" message and exits successfully.
 
-  - Ensures the profile directory exists, creating it if necessary.
-  - Reads the existing profile content (if any).
-  - If the content already contains the marker line `# gwe shell integration`,
-    it performs no changes (idempotent).
-  - Otherwise, opens the profile file in append mode, optionally inserts a
-    newline, and appends:
-    - The marker line `# gwe shell integration`.
-    - The shell script from the corresponding shell module.
+- Install (default; no `--check`/`--uninstall`):
+
+  - Attempts to set the following global git config defaults (errors ignored;
+    existing values are overwritten):
+    - `gwe.defaultEditor = cursor`
+    - `gwe.defaultCli = claude`
+    - Prints a short hint to `stderr`.
+
+  - For supported shells (`pwsh`, `bash`, `zsh`):
+
+    - Ensures the profile directory exists, creating it if necessary.
+    - Reads the existing profile content (if any).
+    - If the content already contains the marker block, it performs no changes
+      (idempotent).
+    - Otherwise, opens the profile file in append mode, optionally inserts a
+      newline, and appends:
+      - The marker line `# gwe shell integration (begin)`.
+      - The shell script from the corresponding shell module.
+      - The marker line `# gwe shell integration (end)`.
 
 - For `cmd`:
 
@@ -1130,9 +1179,11 @@ The PowerShell script emitted by `gwe shell-init pwsh` and appended by
   - When completing the first argument (the subcommand), suggests:
     `add`, `list`, `rm`, `cd`, `init`, `shell-init`, `config`, `cursor`, `wind`, `anti`, `claude`, `codex`, `gemini`, `cli`, `-e`, `-c`.
   - When the subcommand is `cd` / `rm` / tool commands (`cursor`/`wind`/`anti`/`claude`/`codex`/`gemini`/`cli`/`-e`/`-c`), it:
-    - Invokes `gwe list --json`.
-    - Parses the JSON into objects with a `.name` field.
-    - Suggests each `name` as a completion candidate.
+    - Invokes `gwe list --completion`.
+    - Parses the TSV into `name`, `branch`, `abs_path`.
+    - Suggests entries when the typed text matches `name`, `branch`, or
+      `abs_path` (case‑insensitive).
+    - Displays the label as `name [branch] <rel_path>` (relative to repo root).
     - Special‑cases the `"@"` name by offering it quoted as `'@'` to avoid
       PowerShell parsing issues (but excludes `"@"` for `rm`).
 
@@ -1156,13 +1207,29 @@ The Bash script emitted by `gwe shell-init bash` and appended by
 
   - For all other commands, passes through to the real `gwe` executable.
 
+- A bash completion function (`_gwe_complete`) that:
+
+  - Suggests subcommands when completing the first argument.
+  - For `cd` / `rm` / tool commands, invokes `gwe list --completion`.
+  - Matches against `name`, `branch`, or `abs_path` (case‑insensitive).
+  - Emits `name` as the completion candidate (Bash does not show descriptions).
+  - When listing candidates, prints `name`, `branch`, and repo‑root relative
+    paths to stderr so the list shows more detail.
+
 
 8.3 Zsh
 ~~~~~~~
 
 The Zsh script emitted by `gwe shell-init zsh` and appended by
-`gwe init --shell zsh` is identical to the Bash script, as the syntax is
-compatible.
+`gwe init --shell zsh` contains:
+
+- The same `gwe` function behavior as the Bash script.
+- A Zsh completion function that:
+
+  - Suggests subcommands when completing the first argument.
+  - For `cd` / `rm` / tool commands, invokes `gwe list --completion`.
+  - Matches against `name`, `branch`, or `abs_path` (case‑insensitive).
+  - Shows `branch` and a repo-root relative path as completion descriptions.
 
 
 9. Logging and Error Handling

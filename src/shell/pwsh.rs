@@ -34,7 +34,7 @@ function gwe {
     $global:LASTEXITCODE = $exitCode
 }
 
-Register-ArgumentCompleter -Native -CommandName gwe -ScriptBlock {
+Register-ArgumentCompleter -CommandName gwe -ScriptBlock {
     param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
 
     $commands = @('add','list','rm','cd','init','shell-init','config','cursor','wind','anti','claude','codex','gemini','cli','-e','-c')
@@ -53,31 +53,67 @@ Register-ArgumentCompleter -Native -CommandName gwe -ScriptBlock {
 
     if ($subcommand -in @('cd','rm','cursor','wind','anti','claude','codex','gemini','cli','-e','-c')) {
         $exe = Get-GweExePath
-        $json = & $exe list --json 2>$null
+        $rows = & $exe list --completion 2>$null
         if (-not $?) {
             return
         }
 
-        $items = $json | ConvertFrom-Json
-        foreach ($item in $items) {
-            $name = $item.name
+        $needle = $wordToComplete.Trim("'\"")
+        $items = @()
+        $repoRoot = $null
+        foreach ($line in $rows) {
+            $parts = $line -split "`t", 3
+            if ($parts.Length -lt 3) { continue }
+
+            $name = $parts[0]
+            $branch = $parts[1]
+            $absPath = $parts[2]
             if (-not $name) { continue }
 
+            if ($name -eq '@') {
+                $repoRoot = $absPath
+            }
+
+            $items += [PSCustomObject]@{ Name = $name; Branch = $branch; AbsPath = $absPath }
+        }
+
+        if (-not $repoRoot -and $items.Count -gt 0) {
+            $repoRoot = $items[0].AbsPath
+        }
+
+        foreach ($item in $items) {
+            $name = $item.Name
+            $branch = $item.Branch
+            $absPath = $item.AbsPath
+
             # rm はメイン worktree を削除できないため、候補から除外する
-            if ($subcommand -eq 'rm' -and ($item.is_main -eq $true -or $name -eq '@')) {
+            if ($subcommand -eq 'rm' -and $name -eq '@') {
+                continue
+            }
+
+            $haystack = "$name $branch $absPath"
+            if ($haystack -notlike "*$needle*") {
                 continue
             }
 
             # PowerShell では @ は特殊トークンなので、補完時にはクォート付きで挿入する
             if ($name -eq '@') {
-                $displayName = "'@'"
+                $completion = "'@'"
             } else {
-                $displayName = $name
+                $completion = $name
             }
 
-            if ($displayName -like "$wordToComplete*") {
-                [System.Management.Automation.CompletionResult]::new($displayName, $displayName, 'ParameterValue', $displayName)
+            $displayPath = $absPath
+            if ($repoRoot) {
+                try {
+                    $displayPath = [System.IO.Path]::GetRelativePath($repoRoot, $absPath)
+                } catch {
+                    $displayPath = $absPath
+                }
             }
+
+            $label = "$name [$branch] $displayPath"
+            [System.Management.Automation.CompletionResult]::new($completion, $label, 'ParameterValue', $absPath)
         }
         return
     }

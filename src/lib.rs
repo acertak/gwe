@@ -27,7 +27,10 @@ pub fn run() -> Result<ExitCode> {
                 &repo,
                 &git,
                 &config,
-                worktree::list::ListOptions { json: cmd.json },
+                worktree::list::ListOptions {
+                    json: cmd.json,
+                    completion: cmd.completion,
+                },
             )?;
         }
         cli::Command::Rm(cmd) => {
@@ -107,44 +110,61 @@ pub fn run() -> Result<ExitCode> {
             worktree::tool::run_multi_cli(&repo, &git, &config, &cmd)?;
         }
         cli::Command::Init(cmd) => {
-            // Set default configuration automatically
             let repo = git::rev::RepoContext::discover(globals.repo.clone())?;
+            let profile = match cmd.shell {
+                cli::ShellKind::Pwsh => match &cmd.profile {
+                    Some(path) => path.clone(),
+                    None => shell::init::default_pwsh_profile()?,
+                },
+                cli::ShellKind::Bash => match &cmd.profile {
+                    Some(path) => path.clone(),
+                    None => shell::init::default_bash_profile()?,
+                },
+                cli::ShellKind::Zsh => match &cmd.profile {
+                    Some(path) => path.clone(),
+                    None => shell::init::default_zsh_profile()?,
+                },
+                cli::ShellKind::Cmd => {
+                    return Err(anyhow!("shell 'cmd' is not supported yet"));
+                }
+            };
+
+            if cmd.check {
+                let installed = shell::init::check_installed(&profile)?;
+                if installed {
+                    println!("Shell integration is installed: {}", profile.display());
+                } else {
+                    return Err(anyhow!("Shell integration is not installed: {}", profile.display()));
+                }
+                return Ok(ExitCode::SUCCESS);
+            }
+
+            if cmd.uninstall {
+                let removed = shell::init::uninstall(&profile)?;
+                if removed {
+                    println!("Shell integration removed: {}", profile.display());
+                } else {
+                    println!("Shell integration not found: {}", profile.display());
+                }
+                return Ok(ExitCode::SUCCESS);
+            }
+
+            // Set default configuration automatically (install only)
             let runner = git::runner::GitRunner::new(repo.clone());
-            
-            // Ignore errors if config fails (e.g. outside of git repo, though discover checks that)
-            // or if we want to make it optional in future.
-            // For now, we try to set global config.
             let _ = runner.run(["config", "--global", "gwe.defaultEditor", "cursor"]);
             let _ = runner.run(["config", "--global", "gwe.defaultCli", "claude"]);
             eprintln!("Set default configuration: editor=cursor, cli=claude");
             eprintln!("To change defaults, edit global gitconfig or run: gwe config set --global gwe.defaultEditor <EDITOR>");
 
             match cmd.shell {
-            cli::ShellKind::Pwsh => {
-                let profile = match &cmd.profile {
-                    Some(path) => path.clone(),
-                    None => shell::init::default_pwsh_profile()?,
-                };
-                shell::init::init_pwsh(&profile)?;
+                cli::ShellKind::Pwsh => shell::init::init_pwsh(&profile)?,
+                cli::ShellKind::Bash => shell::init::init_bash(&profile)?,
+                cli::ShellKind::Zsh => shell::init::init_zsh(&profile)?,
+                cli::ShellKind::Cmd => {
+                    return Err(anyhow!("shell 'cmd' is not supported yet"));
+                }
             }
-            cli::ShellKind::Bash => {
-                let profile = match &cmd.profile {
-                    Some(path) => path.clone(),
-                    None => shell::init::default_bash_profile()?,
-                };
-                shell::init::init_bash(&profile)?;
-            }
-            cli::ShellKind::Zsh => {
-                let profile = match &cmd.profile {
-                    Some(path) => path.clone(),
-                    None => shell::init::default_zsh_profile()?,
-                };
-                shell::init::init_zsh(&profile)?;
-            }
-            cli::ShellKind::Cmd => {
-                return Err(anyhow!("shell 'cmd' is not supported yet"));
-            }
-        }},
+        }
         cli::Command::ShellInit(cmd) => match cmd.shell {
             cli::ShellKind::Pwsh => {
                 print!("{}", shell::pwsh::script());

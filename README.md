@@ -180,7 +180,15 @@ gwe init --shell pwsh
 
 # 新しい PowerShell を開いて確認
 gwe cd @
-gwe cd <TAB>  # worktree 名が補完されます
+gwe cd <TAB>  # 候補が表示され、部分一致で補完できます（表示は name/branch/相対パス）
+```
+
+```powershell
+# インストール状態の確認
+gwe init --check
+
+# アンインストール
+gwe init --uninstall
 ```
 
 #### macOS (Zsh / Bash) の場合
@@ -194,17 +202,18 @@ gwe init --shell bash
 
 # 新しいターミナルを開いて確認
 gwe cd @
-gwe cd <TAB>  # worktree 名が補完されます
+gwe cd <TAB>  # 候補が表示され、部分一致で補完できます（表示は name/branch/相対パス。Bash は補完挿入は name のみで、一覧表示時に相対パスを表示）
 ```
 
 これが行うこと:
 
 - 必要に応じてプロファイルディレクトリ/ファイルを作成します。
-- `# gwe shell integration` で始まるセクションを追記します。
+- `# gwe shell integration (begin/end)` で囲まれたセクションを追記します。
 - 以下の機能を持つ `gwe` 関数を定義します:
   - 実際の `gwe` バイナリを呼び出す。
   - 最初の引数が `cd` でコマンドが成功した場合、カレントディレクトリを表示されたパスに変更する。
 - シェル補完を登録します (PowerShell の ArgumentCompleter, Bash/Zsh の complete 関数)。
+- Tab 補完は name/branch/abs_path の部分一致で候補を絞り込みます（表示はリポジトリルートからの相対パス。Bash は補完挿入は name のみで、一覧表示時に相対パスを表示）。
 - （現在の実装）グローバル git config に `gwe.defaultEditor=cursor` と `gwe.defaultCli=claude` を自動設定します（変更したい場合は `gwe config set -g ...` を使用してください）。
 
 手動でプロファイルを管理したい場合は、スクリプトを出力して確認できます:
@@ -265,8 +274,11 @@ gwe list
 # @*                        main             c72c7800 clean   origin/main    C:\src\my-project
 # my-project\feature\auth   feature/auth     def45678 dirty   origin/feature/auth C:\src\my-project\..\worktree\my-project\feature\auth
 
-# ツールや補完用の JSON 出力
+# ツール用の JSON 出力
 gwe list --json
+
+# 補完用の TSV 出力 (name/branch/abs_path)
+gwe list --completion
 ```
 
 JSON 出力は概ね以下のようになります:
@@ -314,7 +326,15 @@ gwe cd feature/auth
 # メイン worktree に戻る
 gwe cd @
 gwe cd my-project   # リポジトリ名でも可
+
+# 対話選択（引数なし）
+gwe cd
+
+# 直前の worktree に戻る
+gwe cd -
 ```
+
+対話選択の一覧表示では、パスはリポジトリルートからの相対パスで表示されます。
 
 `gwe` が指定された worktree を見つけられない場合、利用可能な名前のリストと共にヘルプを表示し、`gwe list` の実行を提案します。
 
@@ -326,6 +346,12 @@ gwe cd my-project   # リポジトリ名でも可
 ```powershell
 # 設定値を取得
 gwe config get gwe.worktrees.dir
+
+# 設定値を一覧表示
+gwe config list
+
+# 設定の診断
+gwe config doctor
 
 # 設定値を設定
 gwe config set gwe.worktrees.dir "../worktree"
